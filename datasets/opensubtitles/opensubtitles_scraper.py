@@ -35,7 +35,6 @@ Main features:
 BASE_DIR = Path(__file__).resolve().parent
 
 MOVIES_CSV = BASE_DIR.parent / "movies" / "movies_clean.csv"
-MOVIES_CSV_FIXED = BASE_DIR.parent / "movies" / "movies_clean_fixed.csv"
 SUBS_DIR = BASE_DIR / "subs"
 MISSING_LOG_PATH = BASE_DIR / "missing_subtitles.txt"
 
@@ -49,7 +48,7 @@ def scrape_subtitles_for_movies(
     movies_csv=MOVIES_CSV,
     subs_dir=SUBS_DIR,
     language="en",
-    delay_seconds=1.1,
+    delay_seconds=0.5,
     limit=None,
 ):
     """
@@ -581,8 +580,6 @@ def fix_movie_title(title):
 
 if __name__ == "__main__":
     scrape_subtitles_for_movies(
-        movies_csv=MOVIES_CSV,
-        subs_dir=SUBS_DIR,
         language="en",
         delay_seconds=1.1,
         limit=None,
