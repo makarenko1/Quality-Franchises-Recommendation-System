@@ -1,0 +1,157 @@
+MovieID	Title	Year	Reason
+108	Catwalk	1996	no_subtitles_found
+131	Frankie Starlight	1995	no_subtitles_found
+133	Nueba Yol	1995	no_subtitles_found
+143	Gospa	1995	no_subtitles_found
+183	Mute Witness	1994	no_subtitles_found
+189	Reckless	1995	no_subtitles_found
+248	Houseguest	1994	no_subtitles_found
+346	Backbeat	1993	no_subtitles_found
+401	Mirage	1995	no_subtitles_found
+576	Fausto	1993	no_subtitles_found
+582	Metisse (Cafe au Lait)	1993	no_subtitles_found
+600	Love and a .45	1994	no_subtitles_found
+604	Criminals	1996	no_subtitles_found
+607	Century	1993	no_subtitles_found
+614	Loaded	1994	no_subtitles_found
+619	Ed	1996	download_failed: Subtitle search failed: 400
+{"errors":["Query is too short"],"status":400}
+636	Frisk	1995	no_subtitles_found
+642	Roula	1995	no_subtitles_found
+652	301, 302 (a.k.a. 301/302)	1995	no_subtitles_found
+657	Yankee Zulu	1994	no_subtitles_found
+660	August	1996	no_subtitles_found
+671	Mystery Science Theater 3000: The Movie	1996	no_subtitles_found
+672	Tarantella	1995	no_subtitles_found
+681	Clean Slate (Coup de Torchon)	1981	no_subtitles_found
+768	Someone Else's America	1995	no_subtitles_found
+770	Costa Brava	1946	no_subtitles_found
+774	Wend Kuuni (a.k.a. God's Gift)	1982	no_subtitles_found
+815	Power 98	1996	no_subtitles_found
+819	Stefano Quantestorie	1993	no_subtitles_found
+822	Hedd Wyn	1992	no_subtitles_found
+889	1-900 (06)	1994	no_subtitles_found
+952	Around the World in 80 Days	1956	no_subtitles_found
+965	The 39 Steps	1935	no_subtitles_found
+1019	20,000 Leagues Under the Sea	1954	no_subtitles_found
+1039	Synthetic Pleasures	1995	no_subtitles_found
+1107	Loser	1991	no_subtitles_found
+1112	Palookaville	1996	no_subtitles_found
+1115	Sleepover	1995	no_subtitles_found
+1118	Tashunga	1995	no_subtitles_found
+1119	Drunks	1997	no_subtitles_found
+1121	Glory Daze	1996	no_subtitles_found
+1122	Plutonium Circus	1995	no_subtitles_found
+1134	Johnny 100 Pesos (Johnny cien pesos)	1993	no_subtitles_found
+1138	Dadetown	1995	no_subtitles_found
+1145	Snowriders	1996	no_subtitles_found
+1146	Curtis's Charm	1995	no_subtitles_found
+1177	Enchanted April	1992	no_subtitles_found
+1203	12 Angry Men	1957	no_subtitles_found
+1260	M	1931	download_failed: Subtitle search failed: 400
+{"errors":["Query is too short"],"status":400}
+1285	Heathers	1989	no_subtitles_found
+1289	Koyaanisqatsi (a.k.a. Koyaanisqatsi: Life Out of Balance)	1983	no_subtitles_found
+1367	101 Dalmatians	1996	no_subtitles_found
+1422	Murder at 1600	1997	no_subtitles_found
+1430	Underworld	1996	no_subtitles_found
+1444	Guantanamera	1994	no_subtitles_found
+1454	SubUrbia	1997	no_subtitles_found
+1474	Jungle2Jungle (a.k.a. Jungle 2 Jungle)	1997	no_subtitles_found
+1522	Ripe	1996	no_subtitles_found
+1547	Shiloh	1997	no_subtitles_found
+1609	One Eight Seven (a.k.a. 187)	1997	no_subtitles_found
+1636	Stag	1997	no_subtitles_found
+1657	Wonderland	1997	no_subtitles_found
+1706	Tar	1996	no_subtitles_found
+1709	Legal Deceit	1997	no_subtitles_found
+1738	Vermin	1998	no_subtitles_found
+1774	Mass Transit	1998	no_subtitles_found
+1815	Eden	1997	no_subtitles_found
+1819	Storefront Hitchcock	1997	no_subtitles_found
+1870	Dancer, Texas Pop. 81	1998	no_subtitles_found
+1916	Buffalo '66 (a.k.a. Buffalo 66)	1998	no_subtitles_found
+1921	Pi	1998	download_failed: Subtitle search failed: 400
+{"errors":["Query is too short"],"status":400}
+1925	Wings	1927	no_subtitles_found
+2014	Freaky Friday	1977	no_subtitles_found
+2085	One Hundred and One Dalmatians (a.k.a. 101 Dalmatians)	1961	no_subtitles_found
+2107	Halloween H20: 20 Years Later	1998	no_subtitles_found
+2188	54	1998	download_failed: Subtitle search failed: 400
+{"errors":["Query is too short"],"status":400}
+2198	Modulations	1998	no_subtitles_found
+2214	Number Seventeen (a.k.a. Number 17)	1932	no_subtitles_found
+2217	Elstree Calling	1930	no_subtitles_found
+2222	Champagne	1928	no_subtitles_found
+2225	Easy Virtue	1927	no_subtitles_found
+2230	Always Tell Your Wife	1923	no_subtitles_found
+2308	Detroit 9000	1973	no_subtitles_found
+2444	24 7: Twenty Four Seven	1997	no_subtitles_found
+2475	52 Pick-Up	1986	no_subtitles_found
+2486	24-hour Woman	1998	no_subtitles_found
+2492	20 Dates	1998	no_subtitles_found
+2504	200 Cigarettes	1999	no_subtitles_found
+2538	Dancemaker	1998	no_subtitles_found
+2572	10 Things I Hate About You	1999	no_subtitles_found
+2580	Go	1999	download_failed: Subtitle search failed: 400
+{"errors":["Query is too short"],"status":400}
+2584	Foolish	1999	no_subtitles_found
+2588	Cloudland	1998	no_subtitles_found
+2603	No	1998	download_failed: Subtitle search failed: 400
+{"errors":["Query is too short"],"status":400}
+2619	Mascara	1999	no_subtitles_found
+2627	Endurance	1999	no_subtitles_found
+2677	Buena Vista Social Club	1999	download_failed: Subtitle file download failed: 410
+
+2684	Taxman	1999	no_subtitles_found
+2691	The Legend of 1900 (a.k.a. The Legend of the Pianist on the Ocean) (Leggenda del pianista sull'oceano)	1998	no_subtitles_found
+2698	Zone 39	1997	no_subtitles_found
+2731	The 400 Blows (Les Quatre cents coups)	1959	no_subtitles_found
+2754	Deadtime Stories	1987	download_failed: Subtitle file download failed: 410
+
+2777	Cobra	1925	no_subtitles_found
+2848	Othello	1952	no_subtitles_found
+2927	Brief Encounter	1946	no_subtitles_found
+2957	Sparrows	1926	no_subtitles_found
+2958	Naturally Native	1998	no_subtitles_found
+2960	Beefcake	1999	no_subtitles_found
+3123	Lauderdale (a.k.a. Spring Break USA) (a.k.a. Spring Fever USA)	1989	no_subtitles_found
+3162	Simpatico	1999	no_subtitles_found
+3170	Hi-Yo Silver	1940	no_subtitles_found
+3193	Creature	1999	no_subtitles_found
+3196	Stalag 17	1953	no_subtitles_found
+3228	Wirey Spindell	2000	no_subtitles_found
+3236	Zachariah	1971	no_subtitles_found
+3278	Gendernauts	1999	no_subtitles_found
+3279	Knockout	1999	no_subtitles_found
+3290	Soft Toilet Seats	1999	no_subtitles_found
+3305	Bluebeard	1944	no_subtitles_found
+3319	Judy Berlin	1999	no_subtitles_found
+3356	Condo Painting	2000	no_subtitles_found
+3519	Force 10 from Navarone	1978	no_subtitles_found
+3534	28 Days	2000	no_subtitles_found
+3555	U-571	2000	no_subtitles_found
+3561	Stacy's Knights	1982	no_subtitles_found
+3611	Saludos Amigos	1943	no_subtitles_found
+3626	8 12 Women (a.k.a. 8 1/2 Women) (a.k.a. Eight and a Half Women)	1999	no_subtitles_found
+3717	Gone in 60 Seconds	2000	no_subtitles_found
+3726	Assault on Precinct 13	1976	no_subtitles_found
+3881	Phish: Bittersweet Motel	2000	no_subtitles_found
+3961	Ghoulies	1985	no_subtitles_found
+3991	102 Dalmatians	2000	no_subtitles_found
+4159	3000 Miles to Graceland	2001	no_subtitles_found
+4167	15 Minutes	2001	no_subtitles_found
+4208	Unmade Beds	1997	no_subtitles_found
+4216	Longtime Companion	1990	no_subtitles_found
+4272	Tuvalu	1999	no_subtitles_found
+4295	Backtrack (a.k.a. Catchfire)	1990	no_subtitles_found
+4301	Calle 54	2000	no_subtitles_found
+4311	Bloody Angels (1732 Hotten: Marerittet Har et Postnummer)	1998	no_subtitles_found
+4315	Gabriela	2001	no_subtitles_found
+4331	Semi-Tough	1978	no_subtitles_found
+4349	Catch-22	1970	no_subtitles_found
+4358	Macabre	1958	no_subtitles_found
+4385	Pandaemonium	2000	no_subtitles_found
+4462	18 Again!	1988	no_subtitles_found
+4473	Bat*21	1988	no_subtitles_found
+4556	Track 29	1988	no_subtitles_found
