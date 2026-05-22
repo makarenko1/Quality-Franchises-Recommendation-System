@@ -1,0 +1,30 @@
+Franchise and Dialogue Analysis
+========================================
+Dataset rows: 10,314
+
+1. Franchise installment number vs IMDb rating
+----------------------------------------
+Franchise rows with ratings: 676
+Unique franchises: 337
+Pearson correlation: -0.3269
+Spearman correlation: -0.3635
+Linear trend slope: -0.2749 IMDb rating points per installment
+Interpretation: the estimated trend is negative, which supports the hypothesis that later installments tend to score lower.
+
+2. Dialogue features vs IMDb rating
+----------------------------------------
+Rows with IMDb ratings: 9,222
+Available dialogue features:
+  - num_tokens
+  - num_unique_tokens
+  - type_token_ratio
+  - hapax_ratio
+
+Correlations with IMDb rating:
+  num_tokens: Pearson=0.0669, Spearman=0.0437, n=9222
+  num_unique_tokens: Pearson=0.0559, Spearman=0.0453, n=9222
+  type_token_ratio: Pearson=0.0222, Spearman=-0.0054, n=9222
+  hapax_ratio: Pearson=-0.0209, Spearman=-0.0202, n=9222
+
+Strongest absolute Pearson relationship: num_tokens (0.0669).
+Interpretation: dialogue features show only very weak relationships with IMDb rating in this simple correlation analysis.
