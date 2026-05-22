@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import importlib.util
 from collections import Counter
 
 import pandas as pd
@@ -9,12 +10,27 @@ DATASETS_DIR = Path("datasets")
 
 MOVIES_DIR = DATASETS_DIR / "movies"
 OPENSUBTITLES_DIR = DATASETS_DIR / "opensubtitles"
+IMDB_DIR = DATASETS_DIR / "imdb"
 
 MOVIES_CSV = MOVIES_DIR / "movies_clean.csv"
 FRANCHISES_CSV = DATASETS_DIR / "franchises" / "franchises.csv"
 SUBS_DIR = OPENSUBTITLES_DIR / "subs"
 
+IMDB_RAW_DIR = IMDB_DIR / "raw"
+IMDB_PREPROCESS_SCRIPT = IMDB_DIR / "imdb_preprocess.py"
+IMDB_MOVIES_CSV = IMDB_DIR / "imdb_movies_clean.csv"
+IMDB_RATINGS_CSV = IMDB_DIR / "imdb_ratings_clean.csv"
+IMDB_LOG = IMDB_DIR / "imdb_cleaning_log.txt"
+
 MAIN_DATASET = Path("dataset.csv")
+FRANCHISE_ANALYSIS_SCRIPT = Path("franchises_analysis.py")
+
+LANGUAGE_FEATURE_COLUMNS = {
+    "num_tokens",
+    "num_unique_tokens",
+    "type_token_ratio",
+    "hapax_ratio",
+}
 
 
 def ensure_preprocessed_datasets():
@@ -22,12 +38,17 @@ def ensure_preprocessed_datasets():
     Create or update the main dataset.csv.
 
     Processing order:
-        1. If dataset.csv does not exist, create it from movies that have subtitles.
-        2. Preprocess OpenSubtitles.
-        3. Merge subtitle dialogue features into dataset.csv.
+        1. Ensure IMDb preprocessing exists.
+        2. If dataset.csv does not exist, create it from movies that have subtitles.
+        3. Add OpenSubtitles dialogue richness features only if missing.
         4. Add franchise metadata.
-        5. Save everything back to dataset.csv.
+        5. Add IMDb movie metadata and ratings.
+        6. Save everything back to dataset.csv.
+
+    Franchise analysis is called separately after this function.
     """
+    ensure_imdb_preprocessed()
+
     if not MAIN_DATASET.exists():
         print("Creating main dataset from movies with subtitles...")
 
@@ -40,25 +61,98 @@ def ensure_preprocessed_datasets():
         print(f"Loading existing main dataset from {MAIN_DATASET}")
         dataset = pd.read_csv(MAIN_DATASET)
 
-    print("Preprocessing OpenSubtitles...")
-    subtitles = preprocess_opensubtitles(dataset_path=SUBS_DIR)
+    if has_language_features(dataset):
+        print(
+            "Language feature columns already exist, "
+            "skipping OpenSubtitles preprocessing."
+        )
+    else:
+        print("Preprocessing OpenSubtitles...")
+        subtitles = preprocess_opensubtitles(dataset_path=SUBS_DIR)
 
-    print("Merging subtitle features into main dataset...")
-    dataset = merge_movies_with_subtitle_features(
-        movies=dataset,
-        subtitles=subtitles,
-    )
-
-    dataset.to_csv(MAIN_DATASET, index=False)
-    print(f"Saved subtitle features to {MAIN_DATASET}")
+        print("Merging subtitle features into main dataset...")
+        dataset = merge_movies_with_subtitle_features(
+            movies=dataset,
+            subtitles=subtitles,
+        )
 
     print("Adding franchise metadata...")
     dataset = add_franchise_columns(dataset)
+
+    print("Adding IMDb metadata and ratings...")
+    dataset = add_imdb_columns(dataset)
 
     dataset.to_csv(MAIN_DATASET, index=False)
     print(f"Saved final dataset to {MAIN_DATASET}")
 
     return dataset
+
+
+def ensure_imdb_preprocessed():
+    """
+    Run IMDb preprocessing if the processed IMDb files do not already exist.
+
+    Expected input files:
+        datasets/imdb/raw/title.basics.tsv.gz
+        datasets/imdb/raw/title.ratings.tsv.gz
+
+    Also supports uncompressed:
+        datasets/imdb/raw/title.basics.tsv
+        datasets/imdb/raw/title.ratings.tsv
+
+    Expected preprocessing script:
+        datasets/imdb/imdb_preprocess.py
+
+    Outputs:
+        datasets/imdb/imdb_movies_clean.csv
+        datasets/imdb/imdb_ratings_clean.csv
+        datasets/imdb/imdb_cleaning_log.txt
+    """
+    if IMDB_MOVIES_CSV.exists() and IMDB_RATINGS_CSV.exists():
+        print("Found existing IMDb processed files, skipping IMDb preprocessing.")
+        return
+
+    print("Preprocessing IMDb...")
+
+    if not IMDB_PREPROCESS_SCRIPT.exists():
+        raise FileNotFoundError(f"{IMDB_PREPROCESS_SCRIPT} not found")
+
+    basics_path = IMDB_RAW_DIR / "title.basics.tsv.gz"
+    ratings_path = IMDB_RAW_DIR / "title.ratings.tsv.gz"
+
+    if not basics_path.exists():
+        basics_path = IMDB_RAW_DIR / "title.basics.tsv"
+
+    if not ratings_path.exists():
+        ratings_path = IMDB_RAW_DIR / "title.ratings.tsv"
+
+    if not basics_path.exists():
+        raise FileNotFoundError(f"{basics_path} not found")
+
+    if not ratings_path.exists():
+        raise FileNotFoundError(f"{ratings_path} not found")
+
+    spec = importlib.util.spec_from_file_location(
+        "imdb_preprocess",
+        IMDB_PREPROCESS_SCRIPT,
+    )
+
+    imdb_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(imdb_module)
+
+    movies, ratings, log_lines = imdb_module.preprocess_imdb(
+        basics_path,
+        ratings_path,
+    )
+
+    IMDB_DIR.mkdir(parents=True, exist_ok=True)
+
+    movies.to_csv(IMDB_MOVIES_CSV, index=False)
+    ratings.to_csv(IMDB_RATINGS_CSV, index=False)
+    IMDB_LOG.write_text("\n".join(log_lines), encoding="utf-8")
+
+    print(f"Saved IMDb movies to {IMDB_MOVIES_CSV}")
+    print(f"Saved IMDb ratings to {IMDB_RATINGS_CSV}")
 
 
 def create_movies_with_subtitles_dataset(
@@ -233,6 +327,173 @@ def add_franchise_columns(
     return movies
 
 
+def add_imdb_columns(
+    dataset,
+    imdb_movies_csv=IMDB_MOVIES_CSV,
+    imdb_ratings_csv=IMDB_RATINGS_CSV,
+):
+    """
+    Add IMDb movie metadata and ratings to the main dataset.
+
+    Matching is done by normalized title and release year.
+
+    Adds:
+        - imdb_tconst
+        - imdb_Title
+        - imdb_originalTitle
+        - imdb_isAdult
+        - imdb_runtimeMinutes
+        - imdb_averageRating
+        - imdb_numVotes
+        - imdb_low_votes
+    """
+    imdb_movies_csv = Path(imdb_movies_csv)
+    imdb_ratings_csv = Path(imdb_ratings_csv)
+
+    if not imdb_movies_csv.exists():
+        raise FileNotFoundError(f"{imdb_movies_csv} not found")
+
+    if not imdb_ratings_csv.exists():
+        raise FileNotFoundError(f"{imdb_ratings_csv} not found")
+
+    dataset = dataset.copy()
+
+    imdb_cols = [
+        col for col in dataset.columns
+        if col.startswith("imdb_")
+    ]
+
+    dataset = dataset.drop(columns=imdb_cols, errors="ignore")
+
+    imdb_movies = pd.read_csv(imdb_movies_csv)
+    imdb_ratings = pd.read_csv(imdb_ratings_csv)
+
+    required_movie_cols = {
+        "tconst",
+        "Title",
+        "Year",
+    }
+
+    required_rating_cols = {
+        "tconst",
+        "averageRating",
+        "numVotes",
+    }
+
+    missing_movie_cols = required_movie_cols - set(imdb_movies.columns)
+    missing_rating_cols = required_rating_cols - set(imdb_ratings.columns)
+
+    if missing_movie_cols:
+        raise ValueError(f"IMDb movies missing columns: {missing_movie_cols}")
+
+    if missing_rating_cols:
+        raise ValueError(f"IMDb ratings missing columns: {missing_rating_cols}")
+
+    imdb_rating_cols = ["tconst", "averageRating", "numVotes"]
+
+    if "low_votes" in imdb_ratings.columns:
+        imdb_rating_cols.append("low_votes")
+
+    imdb = imdb_movies.merge(
+        imdb_ratings[imdb_rating_cols],
+        on="tconst",
+        how="left",
+    )
+
+    imdb["match_title"] = imdb["Title"].apply(normalize_match_title)
+    imdb["match_year"] = pd.to_numeric(imdb["Year"], errors="coerce")
+
+    dataset["match_title"] = dataset["Title"].apply(normalize_match_title)
+    dataset["match_year"] = pd.to_numeric(dataset["Year"], errors="coerce")
+
+    imdb_lookup_cols = [
+        "match_title",
+        "match_year",
+        "tconst",
+        "Title",
+        "averageRating",
+        "numVotes",
+    ]
+
+    optional_imdb_cols = [
+        "originalTitle_ascii",
+        "isAdult",
+        "runtimeMinutes",
+        "low_votes",
+    ]
+
+    for col in optional_imdb_cols:
+        if col in imdb.columns:
+            imdb_lookup_cols.append(col)
+
+    imdb_lookup = imdb[imdb_lookup_cols].rename(
+        columns={
+            "tconst": "imdb_tconst",
+            "Title": "imdb_Title",
+            "originalTitle_ascii": "imdb_originalTitle",
+            "isAdult": "imdb_isAdult",
+            "runtimeMinutes": "imdb_runtimeMinutes",
+            "averageRating": "imdb_averageRating",
+            "numVotes": "imdb_numVotes",
+            "low_votes": "imdb_low_votes",
+        }
+    )
+
+    imdb_lookup = imdb_lookup.drop_duplicates(
+        subset=["match_title", "match_year"],
+        keep="first",
+    )
+
+    dataset = dataset.merge(
+        imdb_lookup,
+        on=["match_title", "match_year"],
+        how="left",
+    )
+
+    dataset = dataset.drop(columns=["match_title", "match_year"])
+
+    print("Added IMDb metadata")
+    print(f"IMDb matches: {dataset['imdb_tconst'].notna().sum()}")
+
+    return dataset
+
+
+def run_franchise_analysis(analysis_script=FRANCHISE_ANALYSIS_SCRIPT):
+    """
+    Run franchises_analysis.py after dataset.csv has been created or updated.
+
+    The analysis script is expected to read dataset.csv and save plots/results.
+    """
+    analysis_script = Path(analysis_script)
+
+    if not analysis_script.exists():
+        raise FileNotFoundError(f"{analysis_script} not found")
+
+    spec = importlib.util.spec_from_file_location(
+        "franchises_analysis",
+        analysis_script,
+    )
+
+    analysis_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(analysis_module)
+
+    if not hasattr(analysis_module, "main"):
+        raise AttributeError(
+            f"{analysis_script} must define a main() function"
+        )
+
+    analysis_module.main()
+
+    print("Finished franchise analysis.")
+
+
+def has_language_features(dataset):
+    """
+    Check whether the main dataset already contains subtitle/dialogue features.
+    """
+    return LANGUAGE_FEATURE_COLUMNS.issubset(set(dataset.columns))
+
+
 # -----------------------------
 # Helper functions
 # -----------------------------
@@ -366,7 +627,7 @@ def extract_movie_id_from_filename(file_name):
 
 def normalize_match_title(title):
     """
-    Normalize titles for matching MovieLens movies to franchise rows.
+    Normalize titles for matching MovieLens movies, IMDb rows, and franchise rows.
     """
     title = str(title).lower().strip()
     title = re.sub(r"\(.*?\)", "", title)
@@ -387,3 +648,4 @@ def _tokenize(text: str) -> list[str]:
 
 if __name__ == "__main__":
     ensure_preprocessed_datasets()
+    run_franchise_analysis()

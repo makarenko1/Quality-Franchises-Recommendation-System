@@ -1,0 +1,77 @@
+loading files...
+
+title.basics (raw) - 12,441,901 rows x 9 cols
+                  dtype  null_%             sample
+tconst              str     0.0          tt0000001
+titleType           str     0.0              short
+primaryTitle        str     0.0         Carmencita
+originalTitle       str     0.0         Carmencita
+isAdult           int64     0.0                  0
+startYear       float64    11.7             1894.0
+endYear         float64    98.7             1947.0
+runtimeMinutes      str    64.1                  1
+genres              str     4.3  Documentary,Short
+
+title.ratings (raw) - 1,661,903 rows x 3 cols
+                 dtype  null_%     sample
+tconst             str     0.0  tt0000001
+averageRating  float64     0.0        5.7
+numVotes         int64     0.0       2207
+loaded 12,441,901 rows in basics, 1,661,903 in ratings
+
+removing duplicates...
+  removed 0 from basics, 0 from ratings
+
+keeping only movies...
+  kept 743,522 movies, dropped 11,698,379 other rows
+
+fixing column types...
+
+flagging bad values...
+  10 rows with suspicious year
+  30 rows with suspicious runtime
+  0 ratings out of range, set to NA
+
+converting titles to ascii...
+  converted 52,759 primary titles, 69,497 original titles
+
+processing genres...
+  0 rows with unknown genre
+  split into 3 genre columns
+
+building output tables...
+  movies: 743,522 rows
+  ratings: 342,413 rows
+
+imdb_movies_clean - 743,522 rows x 12 cols
+                       dtype  null_%      sample
+tconst                   str     0.0   tt0000009
+Title                    str     0.0  Miss Jerry
+originalTitle_ascii      str     0.0  Miss Jerry
+isAdult                 bool     0.0       False
+Year                   Int32    14.9        1894
+runtimeMinutes         Int32    36.9          45
+Genre1                   str    10.5     Romance
+Genre2                   str    66.8        News
+Genre3                   str    85.5       Sport
+year_flag            boolean     0.0       False
+runtime_flag         boolean     0.0       False
+genre_flag              bool     0.0       False
+
+imdb_ratings_clean - 342,413 rows x 4 cols
+                 dtype  null_%     sample
+tconst             str     0.0  tt0000009
+averageRating  float64     0.0        5.3
+numVotes         Int64     0.0        238
+low_votes      boolean     0.0      False
+
+--- running checks ---
+OK: no duplicate movies (743,522 rows)
+OK: no duplicate ratings (342,413 rows)
+OK: all ratings between 1 and 10
+OK: no negative vote counts
+OK: bad years are flagged
+OK: genre_flag looks right
+OK: titles are ascii
+OK: all ratings match a movie
+--- all checks passed ---
