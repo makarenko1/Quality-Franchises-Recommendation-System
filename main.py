@@ -8,11 +8,14 @@ import pandas as pd
 
 DATASETS_DIR = Path("datasets")
 
-MOVIES_DIR = DATASETS_DIR / "movies"
+MOVIES_DIR = DATASETS_DIR / "movies-1M"
+MOVIES_32M_DIR = DATASETS_DIR / "movies-32M"
 OPENSUBTITLES_DIR = DATASETS_DIR / "opensubtitles"
 IMDB_DIR = DATASETS_DIR / "imdb"
 
 MOVIES_CSV = MOVIES_DIR / "movies_clean.csv"
+MOVIES_32M_PREPROCESS_SCRIPT = MOVIES_32M_DIR / "movies_32m_preprocess.py"
+MOVIES_32M_CSV = MOVIES_32M_DIR / "movies_clean.csv"
 FRANCHISES_CSV = DATASETS_DIR / "franchises" / "franchises.csv"
 SUBS_DIR = OPENSUBTITLES_DIR / "subs"
 
@@ -23,14 +26,67 @@ IMDB_RATINGS_CSV = IMDB_DIR / "imdb_ratings_clean.csv"
 IMDB_LOG = IMDB_DIR / "imdb_cleaning_log.txt"
 
 MAIN_DATASET = Path("dataset.csv")
-FRANCHISE_ANALYSIS_SCRIPT = Path("franchises_analysis.py")
+ANALYSIS_SCRIPT = Path("analyze_data.py")
 
-LANGUAGE_FEATURE_COLUMNS = {
+LANGUAGE_FEATURE_VERSION = 2
+LANGUAGE_FEATURE_VERSION_COL = "language_feature_version"
+
+SUBTITLE_FEATURE_COLUMNS = {
+    # Basic dialogue size
+    "num_lines",
     "num_tokens",
     "num_unique_tokens",
+    "avg_line_length",
+    "median_line_length",
+
+    # Vocabulary richness
     "type_token_ratio",
     "hapax_ratio",
+    "average_word_length",
+    "long_word_ratio",
+    "common_word_ratio",
+    "rare_word_ratio",
+    "simple_word_ratio",
+    "complex_word_ratio",
+
+    # Repetition / formulaic dialogue
+    "top_word_frequency_ratio",
+    "bigram_repetition_ratio",
+    "trigram_repetition_ratio",
+    "repeated_line_ratio",
+    "duplicate_line_count",
+    "most_common_line_frequency",
+    "repeated_short_phrase_ratio",
+
+    # Sentiment / emotion proxies
+    "average_sentiment",
+    "sentiment_variance",
+    "positive_word_ratio",
+    "negative_word_ratio",
+    "anger_word_ratio",
+    "fear_word_ratio",
+    "joy_word_ratio",
+    "sadness_word_ratio",
+
+    # Conversational style
+    "question_line_ratio",
+    "exclamation_line_ratio",
+    "first_person_pronoun_ratio",
+    "second_person_pronoun_ratio",
+    "contraction_ratio",
+
+    # Readability
+    "flesch_reading_ease",
+    "average_sentence_length",
 }
+
+NORMALIZED_LANGUAGE_FEATURE_COLUMNS = {
+    "subtitle_words_per_minute",
+    "unique_subtitle_words_per_minute",
+    "num_lines_per_minute",
+}
+
+LANGUAGE_FEATURE_COLUMNS = SUBTITLE_FEATURE_COLUMNS | NORMALIZED_LANGUAGE_FEATURE_COLUMNS | {LANGUAGE_FEATURE_VERSION_COL}
 
 
 def ensure_preprocessed_datasets():
@@ -39,18 +95,21 @@ def ensure_preprocessed_datasets():
 
     Processing order:
         1. Ensure IMDb preprocessing exists.
-        2. If dataset.csv does not exist, create it from movies that have subtitles.
-        3. Add OpenSubtitles dialogue richness features only if missing.
-        4. Add franchise metadata.
-        5. Add IMDb movie metadata and ratings.
-        6. Save everything back to dataset.csv.
+        2. Ensure MovieLens 32M movie preprocessing exists.
+        3. If dataset.csv does not exist, create it from movies-1M that have subtitles.
+        4. Merge MovieLens 32M movie metadata into dataset.csv.
+        5. Add OpenSubtitles dialogue features only if missing.
+        6. Add franchise metadata.
+        7. Add IMDb movie metadata and ratings.
+        8. Save everything back to dataset.csv.
 
     Franchise analysis is called separately after this function.
     """
     ensure_imdb_preprocessed()
+    ensure_movies_32m_preprocessed()
 
     if not MAIN_DATASET.exists():
-        print("Creating main dataset from movies with subtitles...")
+        print("Creating main dataset from movies-1M with subtitles...")
 
         dataset = create_movies_with_subtitles_dataset(
             movies_csv=MOVIES_CSV,
@@ -61,13 +120,25 @@ def ensure_preprocessed_datasets():
         print(f"Loading existing main dataset from {MAIN_DATASET}")
         dataset = pd.read_csv(MAIN_DATASET)
 
+    dataset = remove_duplicate_movie_ids(dataset)
+
+    print("Merging MovieLens 32M movie metadata into main dataset...")
+    dataset = merge_movies_32m_into_dataset(dataset)
+
+    dataset.to_csv(MAIN_DATASET, index=False)
+    print(f"Saved MovieLens 32M metadata to {MAIN_DATASET}")
+
     if has_language_features(dataset):
         print(
-            "Language feature columns already exist, "
+            "All current language feature columns already exist, "
             "skipping OpenSubtitles preprocessing."
         )
     else:
-        print("Preprocessing OpenSubtitles...")
+        missing_language_features = LANGUAGE_FEATURE_COLUMNS - set(dataset.columns)
+        print(
+            "Preprocessing OpenSubtitles because these language features are missing: "
+            f"{sorted(missing_language_features)}"
+        )
         subtitles = preprocess_opensubtitles(dataset_path=SUBS_DIR)
 
         print("Merging subtitle features into main dataset...")
@@ -86,6 +157,95 @@ def ensure_preprocessed_datasets():
     print(f"Saved final dataset to {MAIN_DATASET}")
 
     return dataset
+
+
+def remove_duplicate_movie_ids(
+    dataset,
+    output_path=MAIN_DATASET,
+    keep="first",
+):
+    """
+    Remove duplicate MovieID rows from the main dataset.
+
+    This keeps one row per MovieID and deletes the duplicate copies. By default,
+    the first occurrence is preserved because existing rows may already contain
+    subtitle, franchise, or IMDb features.
+
+    Parameters
+    ----------
+    dataset : pandas.DataFrame
+        Main dataset.
+    output_path : str or pathlib.Path
+        Path where the deduplicated dataset should be saved.
+    keep : {"first", "last"}
+        Which duplicate row to preserve.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Dataset with unique MovieID values.
+    """
+    if "MovieID" not in dataset.columns:
+        raise ValueError("Column 'MovieID' not found in main dataset")
+
+    dataset = dataset.copy()
+
+    before = len(dataset)
+
+    dataset["MovieID"] = pd.to_numeric(dataset["MovieID"], errors="coerce")
+    dataset = dataset.dropna(subset=["MovieID"]).copy()
+    dataset["MovieID"] = dataset["MovieID"].astype(int)
+
+    invalid_movie_ids_removed = before - len(dataset)
+
+    duplicate_mask = dataset.duplicated(subset="MovieID", keep=keep)
+    duplicate_count = int(duplicate_mask.sum())
+
+    if duplicate_count == 0 and invalid_movie_ids_removed == 0:
+        print("No duplicate MovieID rows found.")
+        return dataset
+
+    dataset = dataset.drop_duplicates(subset="MovieID", keep=keep).copy()
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset.to_csv(output_path, index=False)
+
+    if invalid_movie_ids_removed:
+        print(f"Removed {invalid_movie_ids_removed} rows with invalid MovieID")
+
+    print(
+        f"Removed {duplicate_count} duplicate MovieID rows; "
+        f"kept {len(dataset):,} unique movies."
+    )
+    print(f"Saved deduplicated dataset to {output_path}")
+
+    return dataset
+
+
+def remove_duplicate_movie_ids_from_file(
+    input_path=MAIN_DATASET,
+    output_path=MAIN_DATASET,
+    keep="first",
+):
+    """
+    Remove duplicate MovieID rows directly from dataset.csv.
+
+    This is useful if dataset.csv already exists and you want to clean it
+    without rerunning the full preprocessing pipeline.
+    """
+    input_path = Path(input_path)
+
+    if not input_path.exists():
+        raise FileNotFoundError(f"{input_path} not found")
+
+    dataset = pd.read_csv(input_path)
+
+    return remove_duplicate_movie_ids(
+        dataset=dataset,
+        output_path=output_path,
+        keep=keep,
+    )
 
 
 def ensure_imdb_preprocessed():
@@ -151,8 +311,64 @@ def ensure_imdb_preprocessed():
     ratings.to_csv(IMDB_RATINGS_CSV, index=False)
     IMDB_LOG.write_text("\n".join(log_lines), encoding="utf-8")
 
-    print(f"Saved IMDb movies to {IMDB_MOVIES_CSV}")
+    print(f"Saved IMDb movies-1M to {IMDB_MOVIES_CSV}")
     print(f"Saved IMDb ratings to {IMDB_RATINGS_CSV}")
+
+
+def ensure_movies_32m_preprocessed():
+    """
+    Run MovieLens 32M movie preprocessing if movies_clean.csv does not exist.
+
+    Expected input:
+        datasets/movies-32M/raw/movies.csv
+
+    Expected preprocessing script:
+        datasets/movies-32M/movies_32m_preprocess.py
+
+    Output:
+        datasets/movies-32M/movies_clean.csv
+    """
+    if MOVIES_32M_CSV.exists():
+        print("Found existing MovieLens 32M processed movies, skipping 32M preprocessing.")
+        return
+
+    print("Preprocessing MovieLens 32M movies...")
+
+    if not MOVIES_32M_PREPROCESS_SCRIPT.exists():
+        raise FileNotFoundError(f"{MOVIES_32M_PREPROCESS_SCRIPT} not found")
+
+    raw_movies_path = MOVIES_32M_DIR / "raw" / "movies.csv"
+
+    if not raw_movies_path.exists():
+        raise FileNotFoundError(f"{raw_movies_path} not found")
+
+    spec = importlib.util.spec_from_file_location(
+        "movies_32m_preprocess",
+        MOVIES_32M_PREPROCESS_SCRIPT,
+    )
+
+    movies_32m_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(movies_32m_module)
+
+    if not hasattr(movies_32m_module, "preprocess_movies_32m"):
+        raise AttributeError(
+            f"{MOVIES_32M_PREPROCESS_SCRIPT} must define preprocess_movies_32m()"
+        )
+
+    movies_32m_module.preprocess_movies_32m(
+        raw_dir=MOVIES_32M_DIR / "raw",
+        out_dir=MOVIES_32M_DIR,
+        require_ratings=False,
+        require_tags=False,
+        drop_movies_without_ratings=False,
+    )
+
+    if not MOVIES_32M_CSV.exists():
+        raise FileNotFoundError(
+            f"MovieLens 32M preprocessing finished but {MOVIES_32M_CSV} was not created"
+        )
+
+    print(f"Saved MovieLens 32M movies to {MOVIES_32M_CSV}")
 
 
 def create_movies_with_subtitles_dataset(
@@ -161,7 +377,7 @@ def create_movies_with_subtitles_dataset(
     output_path=MAIN_DATASET,
 ):
     """
-    Create dataset.csv containing only movies that have downloaded subtitles.
+    Create dataset.csv containing only movies-1M that have downloaded subtitles.
     """
     movies_csv = Path(movies_csv)
     subs_dir = Path(subs_dir)
@@ -176,7 +392,7 @@ def create_movies_with_subtitles_dataset(
     movies = pd.read_csv(movies_csv)
 
     if "MovieID" not in movies.columns:
-        raise ValueError("Column 'MovieID' not found in movies dataset")
+        raise ValueError("Column 'MovieID' not found in movies-1M dataset")
 
     movie_ids_with_subs = set()
 
@@ -192,14 +408,127 @@ def create_movies_with_subtitles_dataset(
     movies_with_subs.to_csv(output_path, index=False)
 
     print(f"Found {len(movie_ids_with_subs)} subtitle files")
-    print(f"Saved {len(movies_with_subs)} movies with subtitles to {output_path}")
+    print(f"Saved {len(movies_with_subs)} movies-1M with subtitles to {output_path}")
 
     return movies_with_subs
 
 
+def merge_movies_32m_into_dataset(
+    dataset,
+    movies_32m_csv=MOVIES_32M_CSV,
+):
+    """
+    Merge MovieLens 32M movie metadata into the main dataset.
+
+    Matching is done by MovieID. The 32M movie file is newer, so when a 32M
+    match exists, its Title, Year, and Genre columns replace the older 1M
+    movie metadata before subtitle, franchise, and IMDb matching steps.
+
+    Adds:
+        - MovieLens32MAvailable
+    """
+    movies_32m_csv = Path(movies_32m_csv)
+
+    if not movies_32m_csv.exists():
+        raise FileNotFoundError(f"{movies_32m_csv} not found")
+
+    dataset = remove_duplicate_movie_ids(dataset)
+    movies_32m = pd.read_csv(movies_32m_csv)
+
+    if "MovieID" not in dataset.columns:
+        raise ValueError("Column 'MovieID' not found in main dataset")
+
+    if "MovieID" not in movies_32m.columns:
+        raise ValueError("Column 'MovieID' not found in MovieLens 32M dataset")
+
+    movies_32m = movies_32m.drop_duplicates(subset="MovieID").copy()
+
+    old_32m_cols = [
+        col for col in dataset.columns
+        if col.endswith("_32M")
+        or col == "MovieLens32MAvailable"
+    ]
+    dataset = dataset.drop(columns=old_32m_cols, errors="ignore")
+
+    movie_32m_cols = [
+        col for col in movies_32m.columns
+        if col != "MovieID"
+    ]
+
+    movies_32m = movies_32m.rename(
+        columns={
+            col: f"{col}_32M"
+            for col in movie_32m_cols
+        }
+    )
+
+    dataset = dataset.merge(
+        movies_32m,
+        on="MovieID",
+        how="left",
+    )
+
+    dataset["MovieLens32MAvailable"] = dataset["Title_32M"].notna()
+
+    for col in ["Title", "Year"]:
+        col_32m = f"{col}_32M"
+
+        if col_32m in dataset.columns:
+            dataset[col] = dataset[col_32m].combine_first(dataset[col])
+
+    current_genre_cols = [
+        col for col in dataset.columns
+        if re.fullmatch(r"Genre\d+", col)
+    ]
+
+    genre_32m_cols = [
+        col for col in dataset.columns
+        if re.fullmatch(r"Genre\d+_32M", col)
+    ]
+
+    max_genre_index = 0
+
+    for col in current_genre_cols:
+        max_genre_index = max(
+            max_genre_index,
+            int(col.replace("Genre", "")),
+        )
+
+    for col in genre_32m_cols:
+        max_genre_index = max(
+            max_genre_index,
+            int(col.replace("Genre", "").replace("_32M", "")),
+        )
+
+    for i in range(1, max_genre_index + 1):
+        col = f"Genre{i}"
+        col_32m = f"Genre{i}_32M"
+
+        if col not in dataset.columns:
+            dataset[col] = ""
+
+        if col_32m in dataset.columns:
+            dataset[col] = dataset[col_32m].combine_first(dataset[col])
+
+    drop_cols = [
+        col for col in dataset.columns
+        if col.endswith("_32M")
+    ]
+
+    dataset = dataset.drop(columns=drop_cols, errors="ignore")
+
+    matched = int(dataset["MovieLens32MAvailable"].sum())
+    print(f"MovieLens 32M matches by MovieID: {matched:,} / {len(dataset):,}")
+
+    return dataset
+
+
 def merge_movies_with_subtitle_features(movies, subtitles):
     """
-    Merge main dataset rows with subtitle dialogue richness features.
+    Merge main dataset rows with subtitle dialogue features.
+
+    Existing subtitle feature columns are removed first, so rerunning the
+    pipeline refreshes features instead of creating duplicate columns.
     """
     movies = movies.copy()
     subtitles = subtitles.copy()
@@ -211,21 +540,24 @@ def merge_movies_with_subtitle_features(movies, subtitles):
     subtitles = subtitles.dropna(subset=["MovieID"])
     subtitles["MovieID"] = subtitles["MovieID"].astype(int)
 
-    excluded_cols = {
-        "dataset",
-        "file_name",
-        "file_path",
-    }
-
-    subtitle_feature_cols = [
+    feature_cols = [
         col for col in subtitles.columns
-        if (
-            (col not in movies.columns or col == "MovieID")
-            and col not in excluded_cols
-        )
+        if col in SUBTITLE_FEATURE_COLUMNS
+        or col == LANGUAGE_FEATURE_VERSION_COL
     ]
 
-    subtitles = subtitles[subtitle_feature_cols]
+    if not feature_cols:
+        raise ValueError("No subtitle feature columns were created")
+
+    old_feature_cols = [
+        col for col in movies.columns
+        if col in SUBTITLE_FEATURE_COLUMNS
+        or col in NORMALIZED_LANGUAGE_FEATURE_COLUMNS
+        or col == LANGUAGE_FEATURE_VERSION_COL
+    ]
+
+    movies = movies.drop(columns=old_feature_cols, errors="ignore")
+    subtitles = subtitles[["MovieID"] + feature_cols]
 
     dataset = movies.merge(
         subtitles,
@@ -322,7 +654,7 @@ def add_franchise_columns(
     movies = movies.drop(columns=["match_title", "match_year"])
 
     print("Added franchise metadata")
-    print(f"Franchise movies: {movies['FranchiseID'].notna().sum()}")
+    print(f"Franchise movies-1M: {movies['FranchiseID'].notna().sum()}")
 
     return movies
 
@@ -384,7 +716,7 @@ def add_imdb_columns(
     missing_rating_cols = required_rating_cols - set(imdb_ratings.columns)
 
     if missing_movie_cols:
-        raise ValueError(f"IMDb movies missing columns: {missing_movie_cols}")
+        raise ValueError(f"IMDb movies-1M missing columns: {missing_movie_cols}")
 
     if missing_rating_cols:
         raise ValueError(f"IMDb ratings missing columns: {missing_rating_cols}")
@@ -452,15 +784,64 @@ def add_imdb_columns(
 
     dataset = dataset.drop(columns=["match_title", "match_year"])
 
+    dataset = add_normalized_language_features(dataset)
+
     print("Added IMDb metadata")
     print(f"IMDb matches: {dataset['imdb_tconst'].notna().sum()}")
 
     return dataset
 
 
-def run_franchise_analysis(analysis_script=FRANCHISE_ANALYSIS_SCRIPT):
+def add_normalized_language_features(dataset):
     """
-    Run franchises_analysis.py after dataset.csv has been created or updated.
+    Add subtitle features normalized by IMDb runtime.
+
+    Raw subtitle counts are affected by movie length. These normalized
+    features make dialogue quantity more comparable across films.
+    """
+    dataset = dataset.copy()
+
+    required_cols = {
+        "num_tokens",
+        "num_unique_tokens",
+        "num_lines",
+        "imdb_runtimeMinutes",
+    }
+
+    if not required_cols.issubset(set(dataset.columns)):
+        return dataset
+
+    runtime = pd.to_numeric(
+        dataset["imdb_runtimeMinutes"],
+        errors="coerce",
+    )
+
+    valid_runtime = runtime > 0
+
+    for col in NORMALIZED_LANGUAGE_FEATURE_COLUMNS:
+        dataset[col] = pd.NA
+
+    dataset.loc[valid_runtime, "subtitle_words_per_minute"] = (
+        pd.to_numeric(dataset.loc[valid_runtime, "num_tokens"], errors="coerce")
+        / runtime.loc[valid_runtime]
+    )
+
+    dataset.loc[valid_runtime, "unique_subtitle_words_per_minute"] = (
+        pd.to_numeric(dataset.loc[valid_runtime, "num_unique_tokens"], errors="coerce")
+        / runtime.loc[valid_runtime]
+    )
+
+    dataset.loc[valid_runtime, "num_lines_per_minute"] = (
+        pd.to_numeric(dataset.loc[valid_runtime, "num_lines"], errors="coerce")
+        / runtime.loc[valid_runtime]
+    )
+
+    return dataset
+
+
+def run_analysis(analysis_script=ANALYSIS_SCRIPT):
+    """
+    Run analyze_data.py after dataset.csv has been created or updated.
 
     The analysis script is expected to read dataset.csv and save plots/results.
     """
@@ -489,9 +870,20 @@ def run_franchise_analysis(analysis_script=FRANCHISE_ANALYSIS_SCRIPT):
 
 def has_language_features(dataset):
     """
-    Check whether the main dataset already contains subtitle/dialogue features.
+    Check whether the main dataset already contains the current subtitle features.
+
+    The version column forces OpenSubtitles preprocessing to rerun when the
+    feature definitions change, even if older columns with the same names exist.
     """
-    return LANGUAGE_FEATURE_COLUMNS.issubset(set(dataset.columns))
+    if not LANGUAGE_FEATURE_COLUMNS.issubset(set(dataset.columns)):
+        return False
+
+    version_values = pd.to_numeric(
+        dataset[LANGUAGE_FEATURE_VERSION_COL],
+        errors="coerce",
+    )
+
+    return version_values.eq(LANGUAGE_FEATURE_VERSION).all()
 
 
 # -----------------------------
@@ -505,11 +897,10 @@ def preprocess_opensubtitles(
     """
     Preprocess downloaded OpenSubtitles .srt files.
 
-    Returns one row per subtitle/movie file with dialogue richness features only.
+    Returns one row per subtitle/movie file with numeric dialogue features only.
     Does not save full subtitle text.
     """
     dataset_path = Path(dataset_path)
-
     files = list(dataset_path.rglob("*.srt"))
 
     if limit is not None:
@@ -519,22 +910,60 @@ def preprocess_opensubtitles(
 
     for file_path in files:
         try:
-            dialogue_lines = _extract_opensubtitles_lines(file_path)
+            raw_lines, dialogue_lines = _extract_opensubtitles_line_records(file_path)
             dialogue_text = " ".join(dialogue_lines)
 
-            richness_features = get_dialogue_richness(dialogue_text)
+            features = {
+                **get_dialogue_length_features(dialogue_text, dialogue_lines),
+                **get_dialogue_richness(dialogue_text),
+                **get_dialogue_repetition(dialogue_text, dialogue_lines),
+                **get_dialogue_style_features(raw_lines, dialogue_text),
+                **get_dialogue_sentiment_features(dialogue_text),
+                **get_dialogue_readability_features(raw_lines, dialogue_text),
+            }
 
             rows.append({
-                "dataset": "opensubtitles",
                 "file_name": file_path.name,
-                "file_path": str(file_path),
-                **richness_features,
+                LANGUAGE_FEATURE_VERSION_COL: LANGUAGE_FEATURE_VERSION,
+                **features,
             })
 
         except Exception as e:
             print(f"Failed to process {file_path}: {e}")
 
     return pd.DataFrame(rows)
+
+
+def _extract_opensubtitles_line_records(file_path: Path) -> tuple[list[str], list[str]]:
+    """
+    Extract raw and cleaned dialogue lines from one downloaded .srt subtitle file.
+
+    Raw lines are used for punctuation-based features such as question and
+    exclamation ratios. Cleaned lines are used for token-based features.
+    """
+    raw_lines = []
+    cleaned_lines = []
+
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+
+            if not line:
+                continue
+
+            if line.isdigit():
+                continue
+
+            if "-->" in line:
+                continue
+
+            cleaned = clean_dialogue_text(line)
+
+            if cleaned:
+                raw_lines.append(line)
+                cleaned_lines.append(cleaned)
+
+    return raw_lines, cleaned_lines
 
 
 def _extract_opensubtitles_lines(file_path: Path) -> list[str]:
@@ -610,6 +1039,371 @@ def get_dialogue_richness(dialogue_text: str) -> dict:
     }
 
 
+
+def get_dialogue_length_features(
+    dialogue_text: str,
+    dialogue_lines: list[str] | None = None,
+) -> dict:
+    """
+    Measure subtitle dialogue length.
+    """
+    tokens = _tokenize(dialogue_text)
+    num_lines = len(dialogue_lines) if dialogue_lines else 0
+
+    line_lengths = [
+        len(_tokenize(line))
+        for line in dialogue_lines
+    ] if dialogue_lines else []
+
+    return {
+        "num_lines": num_lines,
+        "avg_line_length": len(tokens) / num_lines if num_lines else 0,
+        "median_line_length": _median(line_lengths),
+    }
+
+
+def get_dialogue_repetition(
+    dialogue_text: str,
+    dialogue_lines: list[str] | None = None,
+) -> dict:
+    """
+    Measure repeated words, repeated phrases, and repeated lines.
+    """
+    tokens = _tokenize(dialogue_text)
+
+    if not tokens:
+        return {
+            "top_word_frequency_ratio": 0,
+            "bigram_repetition_ratio": 0,
+            "trigram_repetition_ratio": 0,
+            "repeated_line_ratio": 0,
+            "duplicate_line_count": 0,
+            "most_common_line_frequency": 0,
+            "repeated_short_phrase_ratio": 0,
+        }
+
+    token_counts = Counter(tokens)
+
+    bigrams = list(zip(tokens, tokens[1:]))
+    trigrams = list(zip(tokens, tokens[1:], tokens[2:]))
+
+    bigram_counts = Counter(bigrams)
+    trigram_counts = Counter(trigrams)
+
+    repeated_bigrams = sum(
+        count for count in bigram_counts.values()
+        if count > 1
+    )
+    repeated_trigrams = sum(
+        count for count in trigram_counts.values()
+        if count > 1
+    )
+
+    repeated_short_phrases = repeated_bigrams + repeated_trigrams
+    total_short_phrases = len(bigrams) + len(trigrams)
+
+    if dialogue_lines:
+        line_counts = Counter(dialogue_lines)
+        repeated_lines = sum(
+            count for count in line_counts.values()
+            if count > 1
+        )
+        duplicate_line_count = sum(
+            count - 1 for count in line_counts.values()
+            if count > 1
+        )
+        most_common_line_frequency = line_counts.most_common(1)[0][1]
+        repeated_line_ratio = repeated_lines / len(dialogue_lines)
+    else:
+        duplicate_line_count = 0
+        most_common_line_frequency = 0
+        repeated_line_ratio = 0
+
+    return {
+        "top_word_frequency_ratio": token_counts.most_common(1)[0][1] / len(tokens),
+        "bigram_repetition_ratio": repeated_bigrams / len(bigrams) if bigrams else 0,
+        "trigram_repetition_ratio": repeated_trigrams / len(trigrams) if trigrams else 0,
+        "repeated_line_ratio": repeated_line_ratio,
+        "duplicate_line_count": duplicate_line_count,
+        "most_common_line_frequency": most_common_line_frequency,
+        "repeated_short_phrase_ratio": (
+            repeated_short_phrases / total_short_phrases
+            if total_short_phrases
+            else 0
+        ),
+    }
+
+
+COMMON_WORDS = {
+    "the", "be", "to", "of", "and", "a", "in", "that", "have", "i",
+    "it", "for", "not", "on", "with", "he", "as", "you", "do", "at",
+    "this", "but", "his", "by", "from", "they", "we", "say", "her", "she",
+    "or", "an", "will", "my", "one", "all", "would", "there", "their",
+    "what", "so", "up", "out", "if", "about", "who", "get", "which", "go",
+    "me", "when", "make", "can", "like", "time", "no", "just", "him",
+    "know", "take", "people", "into", "year", "your", "good", "some",
+    "could", "them", "see", "other", "than", "then", "now", "look",
+    "only", "come", "its", "over", "think", "also", "back", "after",
+    "use", "two", "how", "our", "work", "first", "well", "way", "even",
+    "new", "want", "because", "any", "these", "give", "day", "most", "us",
+}
+
+POSITIVE_WORDS = {
+    "good", "great", "best", "better", "love", "like", "happy", "hope",
+    "yes", "beautiful", "wonderful", "nice", "fine", "win", "winner",
+    "safe", "free", "friend", "thanks", "thank", "joy", "glad", "smile",
+    "perfect", "amazing", "brave", "trust", "peace", "sweet",
+}
+
+NEGATIVE_WORDS = {
+    "bad", "worse", "worst", "hate", "no", "not", "never", "death",
+    "dead", "kill", "killed", "die", "died", "danger", "dangerous",
+    "wrong", "sad", "cry", "pain", "hurt", "afraid", "fear", "angry",
+    "mad", "sorry", "alone", "lost", "hell", "damn", "war", "fight",
+}
+
+ANGER_WORDS = {
+    "angry", "mad", "hate", "kill", "fight", "damn", "hell", "rage",
+    "revenge", "furious", "enemy", "attack", "destroy",
+}
+
+FEAR_WORDS = {
+    "fear", "afraid", "scared", "terrified", "danger", "run", "hide",
+    "death", "die", "dead", "murder", "threat", "monster",
+}
+
+JOY_WORDS = {
+    "happy", "joy", "glad", "smile", "laugh", "love", "wonderful",
+    "beautiful", "great", "party", "fun", "hope", "free",
+}
+
+SADNESS_WORDS = {
+    "sad", "cry", "tears", "alone", "lost", "sorry", "pain", "hurt",
+    "miss", "goodbye", "death", "dead", "grief",
+}
+
+FIRST_PERSON_PRONOUNS = {
+    "i", "me", "my", "mine", "we", "us", "our", "ours",
+}
+
+SECOND_PERSON_PRONOUNS = {
+    "you", "your", "yours", "yourself", "yourselves",
+}
+
+
+def get_dialogue_style_features(
+    raw_lines: list[str],
+    dialogue_text: str,
+) -> dict:
+    """
+    Measure punctuation and conversational style features.
+    """
+    tokens = _tokenize(dialogue_text)
+    num_tokens = len(tokens)
+    num_lines = len(raw_lines)
+
+    if not num_lines:
+        return {
+            "question_line_ratio": 0,
+            "exclamation_line_ratio": 0,
+            "first_person_pronoun_ratio": 0,
+            "second_person_pronoun_ratio": 0,
+            "contraction_ratio": 0,
+        }
+
+    question_lines = sum(1 for line in raw_lines if "?" in line)
+    exclamation_lines = sum(1 for line in raw_lines if "!" in line)
+
+    first_person_count = sum(1 for token in tokens if token in FIRST_PERSON_PRONOUNS)
+    second_person_count = sum(1 for token in tokens if token in SECOND_PERSON_PRONOUNS)
+    contraction_count = sum(1 for token in tokens if "'" in token)
+
+    return {
+        "question_line_ratio": question_lines / num_lines,
+        "exclamation_line_ratio": exclamation_lines / num_lines,
+        "first_person_pronoun_ratio": first_person_count / num_tokens if num_tokens else 0,
+        "second_person_pronoun_ratio": second_person_count / num_tokens if num_tokens else 0,
+        "contraction_ratio": contraction_count / num_tokens if num_tokens else 0,
+    }
+
+
+def get_dialogue_sentiment_features(dialogue_text: str) -> dict:
+    """
+    Estimate simple sentiment and emotion features using small built-in lexicons.
+
+    This is intentionally lightweight and dependency-free. It is not a full
+    sentiment model, but it can reveal whether simple emotional word ratios are
+    useful for the project.
+    """
+    tokens = _tokenize(dialogue_text)
+
+    if not tokens:
+        return {
+            "average_sentiment": 0,
+            "sentiment_variance": 0,
+            "positive_word_ratio": 0,
+            "negative_word_ratio": 0,
+            "anger_word_ratio": 0,
+            "fear_word_ratio": 0,
+            "joy_word_ratio": 0,
+            "sadness_word_ratio": 0,
+        }
+
+    scores = []
+    positive_count = 0
+    negative_count = 0
+    anger_count = 0
+    fear_count = 0
+    joy_count = 0
+    sadness_count = 0
+
+    for token in tokens:
+        score = 0
+
+        if token in POSITIVE_WORDS:
+            positive_count += 1
+            score += 1
+
+        if token in NEGATIVE_WORDS:
+            negative_count += 1
+            score -= 1
+
+        if token in ANGER_WORDS:
+            anger_count += 1
+
+        if token in FEAR_WORDS:
+            fear_count += 1
+
+        if token in JOY_WORDS:
+            joy_count += 1
+
+        if token in SADNESS_WORDS:
+            sadness_count += 1
+
+        scores.append(score)
+
+    avg_sentiment = sum(scores) / len(scores)
+    sentiment_variance = (
+        sum((score - avg_sentiment) ** 2 for score in scores) / len(scores)
+    )
+
+    return {
+        "average_sentiment": avg_sentiment,
+        "sentiment_variance": sentiment_variance,
+        "positive_word_ratio": positive_count / len(tokens),
+        "negative_word_ratio": negative_count / len(tokens),
+        "anger_word_ratio": anger_count / len(tokens),
+        "fear_word_ratio": fear_count / len(tokens),
+        "joy_word_ratio": joy_count / len(tokens),
+        "sadness_word_ratio": sadness_count / len(tokens),
+    }
+
+
+def get_dialogue_readability_features(
+    raw_lines: list[str],
+    dialogue_text: str,
+) -> dict:
+    """
+    Estimate readability and lexical complexity.
+
+    Sentence-based readability must use raw subtitle lines, because the cleaned
+    dialogue text removes punctuation. If no sentence punctuation is found, the
+    number of subtitle lines is used as a conservative sentence proxy.
+    """
+    tokens = _tokenize(dialogue_text)
+
+    if not tokens:
+        return {
+            "average_word_length": 0,
+            "long_word_ratio": 0,
+            "common_word_ratio": 0,
+            "rare_word_ratio": 0,
+            "simple_word_ratio": 0,
+            "complex_word_ratio": 0,
+            "flesch_reading_ease": 0,
+            "average_sentence_length": 0,
+        }
+
+    word_lengths = [len(token.replace("'", "")) for token in tokens]
+    syllable_counts = [_count_syllables(token) for token in tokens]
+
+    long_words = sum(1 for length in word_lengths if length >= 7)
+    simple_words = sum(1 for count in syllable_counts if count <= 1)
+    complex_words = sum(1 for count in syllable_counts if count >= 3)
+    common_words = sum(1 for token in tokens if token in COMMON_WORDS)
+    rare_words = len(tokens) - common_words
+
+    raw_text = " ".join(str(line) for line in raw_lines)
+    sentence_count = len(re.findall(r"[.!?]+", raw_text))
+
+    if sentence_count == 0:
+        sentence_count = max(1, len(raw_lines))
+
+    average_sentence_length = len(tokens) / sentence_count
+    syllables_per_word = sum(syllable_counts) / len(tokens)
+
+    flesch_reading_ease = (
+        206.835
+        - 1.015 * average_sentence_length
+        - 84.6 * syllables_per_word
+    )
+
+    return {
+        "average_word_length": sum(word_lengths) / len(word_lengths),
+        "long_word_ratio": long_words / len(tokens),
+        "common_word_ratio": common_words / len(tokens),
+        "rare_word_ratio": rare_words / len(tokens),
+        "simple_word_ratio": simple_words / len(tokens),
+        "complex_word_ratio": complex_words / len(tokens),
+        "flesch_reading_ease": flesch_reading_ease,
+        "average_sentence_length": average_sentence_length,
+    }
+
+
+def _median(values: list[float]) -> float:
+    """
+    Compute a median without extra dependencies.
+    """
+    if not values:
+        return 0
+
+    sorted_values = sorted(values)
+    n = len(sorted_values)
+    middle = n // 2
+
+    if n % 2 == 1:
+        return sorted_values[middle]
+
+    return (sorted_values[middle - 1] + sorted_values[middle]) / 2
+
+
+def _count_syllables(word: str) -> int:
+    """
+    Approximate English syllable count for readability features.
+    """
+    word = re.sub(r"[^a-z]", "", str(word).lower())
+
+    if not word:
+        return 0
+
+    vowels = "aeiouy"
+    count = 0
+    previous_was_vowel = False
+
+    for char in word:
+        is_vowel = char in vowels
+
+        if is_vowel and not previous_was_vowel:
+            count += 1
+
+        previous_was_vowel = is_vowel
+
+    if word.endswith("e") and count > 1:
+        count -= 1
+
+    return max(count, 1)
+
+
 def extract_movie_id_from_filename(file_name):
     """
     Extract MovieID from subtitle filename.
@@ -627,7 +1421,7 @@ def extract_movie_id_from_filename(file_name):
 
 def normalize_match_title(title):
     """
-    Normalize titles for matching MovieLens movies, IMDb rows, and franchise rows.
+    Normalize titles for matching MovieLens movies-1M, IMDb rows, and franchise rows.
     """
     title = str(title).lower().strip()
     title = re.sub(r"\(.*?\)", "", title)
@@ -648,4 +1442,4 @@ def _tokenize(text: str) -> list[str]:
 
 if __name__ == "__main__":
     ensure_preprocessed_datasets()
-    run_franchise_analysis()
+    run_analysis()

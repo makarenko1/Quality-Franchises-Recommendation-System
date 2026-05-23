@@ -11,19 +11,23 @@ import requests
 
 """
 Downloads English subtitle files from the OpenSubtitles API for movies listed
-in the cleaned MovieLens dataset.
+in cleaned MovieLens datasets.
 
 Expected folder structure:
     datasets/
-        movies/
+        movies-1M/
+            movies_clean.csv
+        movies-32M/
             movies_clean.csv
         opensubtitles/
             opensubtitles_scraper.py
             subs/
-            missing_subtitles.txt
+            missing_subtitles_1m.txt
+            missing_subtitles_32m.txt
 
 Main features:
-    - Reads movie titles from movies_clean.csv
+    - Reads movie titles from cleaned MovieLens CSV files
+    - Supports both movies-1M and movies-32M datasets
     - Fixes MovieLens-style titles before searching OpenSubtitles
     - Searches OpenSubtitles by title and year
     - Saves one .srt subtitle file per movie
@@ -34,14 +38,112 @@ Main features:
 
 BASE_DIR = Path(__file__).resolve().parent
 
-MOVIES_CSV = BASE_DIR.parent / "movies" / "movies_clean.csv"
+MOVIES_1M_CSV = BASE_DIR.parent / "movies-1M" / "movies_clean.csv"
+MOVIES_32M_CSV = BASE_DIR.parent / "movies-32M" / "movies_clean.csv"
+
+# Backward-compatible default.
+MOVIES_CSV = MOVIES_1M_CSV
+
 SUBS_DIR = BASE_DIR / "subs"
-MISSING_LOG_PATH = BASE_DIR / "missing_subtitles.txt"
+
+MISSING_1M_LOG_PATH = BASE_DIR / "missing_subtitles_1m.txt"
+MISSING_32M_LOG_PATH = BASE_DIR / "missing_subtitles_32m.txt"
+
+# Backward-compatible default.
+MISSING_LOG_PATH = MISSING_1M_LOG_PATH
 
 DEFAULT_BASE_URL = "https://api.opensubtitles.com/api/v1"
 USER_AGENT = "movie-recommender-project v1.0"
 
 ARTICLES = r"The|A|An|L'|Le|La|Les"
+
+
+def scrape_subtitles_for_all_movie_datasets(
+    subs_dir=SUBS_DIR,
+    language="en",
+    delay_seconds=0.5,
+    limit=None,
+):
+    """
+    Download subtitles for both MovieLens 1M and MovieLens 32M cleaned datasets.
+
+    Existing subtitle files are skipped, so rerunning this after the 1M scrape
+    will mainly download subtitles for 32M movies that are not already present.
+
+    Parameters
+    ----------
+    subs_dir : str or pathlib.Path
+        Directory where subtitle .srt files will be saved.
+    language : str
+        Subtitle language code. Default is English: "en".
+    delay_seconds : float
+        Delay between API calls to avoid rate-limit errors.
+    limit : int or None
+        Optional number of rows to process from each dataset.
+    """
+    token, api_key, base_url = login()
+
+    scrape_subtitles_for_movies(
+        movies_csv=MOVIES_1M_CSV,
+        subs_dir=subs_dir,
+        language=language,
+        delay_seconds=delay_seconds,
+        limit=limit,
+        missing_log_path=MISSING_1M_LOG_PATH,
+        dataset_name="movies-1M",
+        credentials=(token, api_key, base_url),
+    )
+
+    scrape_subtitles_for_movies(
+        movies_csv=MOVIES_32M_CSV,
+        subs_dir=subs_dir,
+        language=language,
+        delay_seconds=delay_seconds,
+        limit=limit,
+        missing_log_path=MISSING_32M_LOG_PATH,
+        dataset_name="movies-32M",
+        credentials=(token, api_key, base_url),
+    )
+
+
+def scrape_subtitles_for_1m_movies(
+    subs_dir=SUBS_DIR,
+    language="en",
+    delay_seconds=0.5,
+    limit=None,
+):
+    """
+    Download subtitles for the cleaned MovieLens 1M movies dataset.
+    """
+    return scrape_subtitles_for_movies(
+        movies_csv=MOVIES_1M_CSV,
+        subs_dir=subs_dir,
+        language=language,
+        delay_seconds=delay_seconds,
+        limit=limit,
+        missing_log_path=MISSING_1M_LOG_PATH,
+        dataset_name="movies-1M",
+    )
+
+
+def scrape_subtitles_for_32m_movies(
+    subs_dir=SUBS_DIR,
+    language="en",
+    delay_seconds=0.5,
+    limit=None,
+):
+    """
+    Download subtitles for the cleaned MovieLens 32M movies dataset.
+    """
+    return scrape_subtitles_for_movies(
+        movies_csv=MOVIES_32M_CSV,
+        subs_dir=subs_dir,
+        language=language,
+        delay_seconds=delay_seconds,
+        limit=limit,
+        missing_log_path=MISSING_32M_LOG_PATH,
+        dataset_name="movies-32M",
+    )
 
 
 def scrape_subtitles_for_movies(
@@ -50,6 +152,9 @@ def scrape_subtitles_for_movies(
     language="en",
     delay_seconds=0.5,
     limit=None,
+    missing_log_path=MISSING_LOG_PATH,
+    dataset_name=None,
+    credentials=None,
 ):
     """
     Download subtitles for movies listed in a cleaned movies CSV.
@@ -66,24 +171,50 @@ def scrape_subtitles_for_movies(
         Delay between API calls to avoid rate-limit errors.
     limit : int or None
         Optional number of movies to process, useful for testing.
+    missing_log_path : str or pathlib.Path
+        Path to the missing/failed subtitle log.
+    dataset_name : str or None
+        Optional dataset label saved in the missing subtitle log.
+    credentials : tuple[str, str, str] or None
+        Optional precomputed (token, api_key, base_url). This avoids logging in
+        twice when scraping both 1M and 32M datasets.
 
     Notes
     -----
-    Movies are added to missing_subtitles.txt when:
+    Movies are added to the missing subtitles log when:
         - OpenSubtitles returns no matching subtitle.
         - Search or download fails.
     """
+    movies_csv = Path(movies_csv)
     subs_dir = Path(subs_dir)
     subs_dir.mkdir(parents=True, exist_ok=True)
 
+    if not movies_csv.exists():
+        raise FileNotFoundError(f"{movies_csv} not found")
+
     movies = pd.read_csv(movies_csv)
+
+    required_cols = {"MovieID", "Title", "Year"}
+    missing_cols = required_cols - set(movies.columns)
+
+    if missing_cols:
+        raise ValueError(
+            f"{movies_csv} is missing columns: {missing_cols}. "
+            f"Available columns: {list(movies.columns)}"
+        )
 
     if limit is not None:
         movies = movies.head(limit)
 
-    token, api_key, base_url = login()
+    if credentials is None:
+        token, api_key, base_url = login()
+    else:
+        token, api_key, base_url = credentials
 
     missing_titles = []
+
+    print(f"Scraping subtitles from {movies_csv}")
+    print(f"Movies to check: {len(movies):,}")
 
     for _, movie in movies.iterrows():
         movie_id = movie["MovieID"]
@@ -109,7 +240,13 @@ def scrape_subtitles_for_movies(
             if subtitle is None:
                 print(f"No subtitles found: {title} ({year})")
                 missing_titles.append(
-                    format_missing_entry(movie_id, title, year, "no_subtitles_found")
+                    format_missing_entry(
+                        movie_id=movie_id,
+                        title=title,
+                        year=year,
+                        reason="no_subtitles_found",
+                        dataset_name=dataset_name,
+                    )
                 )
                 continue
 
@@ -126,12 +263,21 @@ def scrape_subtitles_for_movies(
         except Exception as e:
             print(f"Failed: {title} ({year}) | {e}")
             missing_titles.append(
-                format_missing_entry(movie_id, title, year, f"download_failed: {e}")
+                format_missing_entry(
+                    movie_id=movie_id,
+                    title=title,
+                    year=year,
+                    reason=f"download_failed: {e}",
+                    dataset_name=dataset_name,
+                )
             )
 
-        time.sleep(delay_seconds)
+        if delay_seconds and delay_seconds > 0:
+            time.sleep(delay_seconds)
 
-    save_missing_titles(missing_titles)
+    save_missing_titles(missing_titles, output_path=missing_log_path)
+
+    return missing_titles
 
 
 def login():
@@ -195,20 +341,6 @@ def login():
 def login_with_username_password(username, password, api_key):
     """
     Log in to OpenSubtitles using username, password, and API key.
-
-    Parameters
-    ----------
-    username : str
-        OpenSubtitles username.
-    password : str
-        OpenSubtitles password.
-    api_key : str
-        OpenSubtitles API key.
-
-    Returns
-    -------
-    tuple[str, str, str]
-        token, api_key, base_url
     """
     response = requests.post(
         f"{DEFAULT_BASE_URL}/login",
@@ -240,26 +372,6 @@ def find_best_subtitle(title, year, language, token, api_key, base_url):
     Search OpenSubtitles and return the best subtitle result.
 
     Results are ordered by download count, descending.
-
-    Parameters
-    ----------
-    title : str
-        Movie title.
-    year : int or None
-        Movie release year.
-    language : str
-        Subtitle language code.
-    token : str
-        OpenSubtitles bearer token.
-    api_key : str
-        OpenSubtitles API key.
-    base_url : str
-        OpenSubtitles API base URL.
-
-    Returns
-    -------
-    dict or None
-        Best subtitle result, or None if no result was found.
     """
     params = {
         "query": title,
@@ -295,19 +407,6 @@ def find_best_subtitle(title, year, language, token, api_key, base_url):
 def download_subtitle(subtitle, output_path, token, api_key, base_url):
     """
     Download one subtitle file and save it to disk.
-
-    Parameters
-    ----------
-    subtitle : dict
-        Subtitle result returned by find_best_subtitle.
-    output_path : str or pathlib.Path
-        Local .srt path where the subtitle should be saved.
-    token : str
-        OpenSubtitles bearer token.
-    api_key : str
-        OpenSubtitles API key.
-    base_url : str
-        OpenSubtitles API base URL.
     """
     files = subtitle["attributes"].get("files", [])
 
@@ -353,18 +452,6 @@ def download_subtitle(subtitle, output_path, token, api_key, base_url):
 def auth_headers(api_key, token=None):
     """
     Build request headers for OpenSubtitles API calls.
-
-    Parameters
-    ----------
-    api_key : str
-        OpenSubtitles API key.
-    token : str or None
-        Optional bearer token.
-
-    Returns
-    -------
-    dict
-        HTTP headers.
     """
     headers = {
         "Api-Key": api_key,
@@ -380,15 +467,6 @@ def auth_headers(api_key, token=None):
 def make_subtitle_filename(movie_id, title, year):
     """
     Create a safe subtitle filename.
-
-    Parameters
-    ----------
-    movie_id : int or str
-        MovieLens movie ID.
-    title : str
-        Movie title.
-    year : int or None
-        Movie release year.
 
     Returns
     -------
@@ -406,18 +484,6 @@ def subtitle_file_exists_for_movie(subs_dir, movie_id):
 
     This uses MovieID as the stable identifier, so the movie is skipped even if
     the saved title text differs slightly from the current cleaned title.
-
-    Parameters
-    ----------
-    subs_dir : str or pathlib.Path
-        Subtitle folder.
-    movie_id : int or str
-        MovieLens movie ID.
-
-    Returns
-    -------
-    bool
-        True if a matching .srt file already exists, otherwise False.
     """
     subs_dir = Path(subs_dir)
     return any(subs_dir.glob(f"{movie_id}_*.srt"))
@@ -426,16 +492,6 @@ def subtitle_file_exists_for_movie(subs_dir, movie_id):
 def safe_filename(text):
     """
     Convert a title to a filesystem-safe lowercase filename component.
-
-    Parameters
-    ----------
-    text : str
-        Raw text.
-
-    Returns
-    -------
-    str
-        Safe filename fragment.
     """
     text = str(text).lower().strip()
     text = re.sub(r"[^a-z0-9]+", "_", text)
@@ -443,40 +499,21 @@ def safe_filename(text):
     return text.strip("_")[:120]
 
 
-def format_missing_entry(movie_id, title, year, reason):
+def format_missing_entry(movie_id, title, year, reason, dataset_name=None):
     """
     Format one missing-subtitle log line.
-
-    Parameters
-    ----------
-    movie_id : int or str
-        MovieLens movie ID.
-    title : str
-        Movie title.
-    year : int or None
-        Movie release year.
-    reason : str
-        Reason the subtitle was not downloaded.
-
-    Returns
-    -------
-    str
-        Tab-separated log entry.
     """
     year_part = str(year) if year is not None else "unknown"
+
+    if dataset_name:
+        return f"{dataset_name}\t{movie_id}\t{title}\t{year_part}\t{reason}"
+
     return f"{movie_id}\t{title}\t{year_part}\t{reason}"
 
 
 def save_missing_titles(missing_titles, output_path=MISSING_LOG_PATH):
     """
     Save missing or failed subtitle downloads to a text file.
-
-    Parameters
-    ----------
-    missing_titles : list[str]
-        Missing subtitle log entries.
-    output_path : str or pathlib.Path
-        Output text file path.
     """
     if not missing_titles:
         return
@@ -484,8 +521,14 @@ def save_missing_titles(missing_titles, output_path=MISSING_LOG_PATH):
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    has_dataset_column = missing_titles[0].count("\t") == 4
+
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write("MovieID\tTitle\tYear\tReason\n")
+        if has_dataset_column:
+            f.write("Dataset\tMovieID\tTitle\tYear\tReason\n")
+        else:
+            f.write("MovieID\tTitle\tYear\tReason\n")
+
         for title in missing_titles:
             f.write(title + "\n")
 
@@ -495,26 +538,6 @@ def save_missing_titles(missing_titles, output_path=MISSING_LOG_PATH):
 def _move_trailing_article(text):
     """
     Move trailing articles from the end of a title to the beginning.
-
-    Supported articles:
-        - English: The, A, An
-        - French: L', Le, La, Les
-
-    Examples
-    --------
-    "Matrix, The" -> "The Matrix"
-    "Enfer, L'" -> "L'Enfer"
-    "Nuits fauves, Les" -> "Les Nuits fauves"
-
-    Parameters
-    ----------
-    text : str
-        Input title string.
-
-    Returns
-    -------
-    str
-        Fixed title if a trailing article is found; otherwise unchanged.
     """
     text = str(text).strip()
 
@@ -542,22 +565,6 @@ def fix_movie_title(title):
 
     Handles article placement in both main titles and parenthetical alternate
     titles.
-
-    Examples
-    --------
-    "Matrix, The" -> "The Matrix"
-    "Enfer, L'" -> "L'Enfer"
-    "Savage Nights (Nuits fauves, Les)" -> "Savage Nights (Les Nuits fauves)"
-
-    Parameters
-    ----------
-    title : str
-        Movie title.
-
-    Returns
-    -------
-    str
-        Fixed title.
     """
     title = str(title).strip()
 
@@ -579,7 +586,10 @@ def fix_movie_title(title):
 
 
 if __name__ == "__main__":
-    scrape_subtitles_for_movies(
+    # Scrape only the new 32M dataset by default.
+    # Existing 1M subtitles in subs/ are skipped automatically if you call
+    # scrape_subtitles_for_all_movie_datasets() instead.
+    scrape_subtitles_for_32m_movies(
         language="en",
         delay_seconds=1.1,
         limit=None,

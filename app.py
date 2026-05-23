@@ -171,7 +171,7 @@ st.markdown("""
 @st.cache_data
 def load_movies():
     df = pd.read_csv(
-        "datasets/movies/movies_clean.csv",
+        "datasets/movies-1M/movies_clean.csv",
         dtype={"MovieID": int, "Year": "Int64"},
     )
     genre_cols = [c for c in df.columns if c.startswith("Genre")]
@@ -220,7 +220,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Section 1: Pick your movies ───────────────────────────────────────────────
+# ── Section 1: Pick your movies-1M ───────────────────────────────────────────────
 st.markdown('<div class="section-header">Pick 3 Movies You Love</div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
@@ -241,7 +241,7 @@ if selections:
     )
     st.markdown(f'<div style="margin-top:0.8rem;">{pills_html}</div>', unsafe_allow_html=True)
 
-# Preview cards for selected movies
+# Preview cards for selected movies-1M
 if selections:
     st.markdown("<br>", unsafe_allow_html=True)
     card_cols = st.columns(3)

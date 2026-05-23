@@ -1,0 +1,205 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <style type="text/css">
+      h1 {
+        color:#fc3;
+        font-family:"Lucida Grande",Verdana,sans-serif;
+        font-size: 150%;
+        font-weight: normal;
+        margin:34px 0 0;
+        background-color: #7A0019;
+      }
+      p {
+        margin-left: 20px;
+      }
+      p.file_line_structure {
+        margin-left: 40px;
+      }
+      table {
+        margin-left: 30px;
+      }
+      th {
+        text-align:left;
+      }
+    </style>
+
+    <title>MovieLens 32M Preprocessing README</title>
+  </head>
+  <body>
+    <h1>
+      Summary
+    </h1>
+    <p>
+      This folder contains preprocessing code for the MovieLens 32M movie metadata,
+      ratings, and tags files.  The preprocessing converts the raw MovieLens CSV
+      files into the cleaned CSV format used by this project.
+    </p>
+
+    <p>
+      The raw MovieLens 32M files are expected to be placed in a <code>raw</code>
+      directory beside the preprocessing script.
+    </p>
+
+    <p class="file_line_structure">
+      <code>
+        datasets/movies-32M/raw/movies.csv<br/>
+        datasets/movies-32M/raw/ratings.csv<br/>
+        datasets/movies-32M/raw/tags.csv
+      </code>
+    </p>
+
+    <p>
+      The <code>movies.csv</code> file is required.  The <code>ratings.csv</code>
+      and <code>tags.csv</code> files are optional: if they exist, they are cleaned,
+      validated, and saved; if they do not exist, the script still cleans the movie
+      metadata.
+    </p>
+
+    <h1>
+      Raw File Structure
+    </h1>
+
+    <h2>
+      Movies File
+    </h2>
+    <p>
+      The raw <code>movies.csv</code> file should contain:
+    </p>
+    <p class="file_line_structure">
+      <code>movieId,title,genres</code>
+    </p>
+    <p>
+      The preprocessing script renames these columns to:
+    </p>
+    <p class="file_line_structure">
+      <code>MovieID,Title,Genres</code>
+    </p>
+
+    <h2>
+      Ratings File
+    </h2>
+    <p>
+      If provided, the raw <code>ratings.csv</code> file should contain:
+    </p>
+    <p class="file_line_structure">
+      <code>userId,movieId,rating,timestamp</code>
+    </p>
+    <p>
+      The preprocessing script renames these columns to:
+    </p>
+    <p class="file_line_structure">
+      <code>UserID,MovieID,Rating,Timestamp</code>
+    </p>
+
+    <h2>
+      Tags File
+    </h2>
+    <p>
+      If provided, the raw <code>tags.csv</code> file should contain:
+    </p>
+    <p class="file_line_structure">
+      <code>userId,movieId,tag,timestamp</code>
+    </p>
+    <p>
+      The preprocessing script renames these columns to:
+    </p>
+    <p class="file_line_structure">
+      <code>UserID,MovieID,Tag,Timestamp</code>
+    </p>
+
+    <h1>
+      Outputs
+    </h1>
+    <p>
+      Running <code>movies_32m_preprocess.py</code> creates the following files:
+    </p>
+
+    <table style="width:75%" border="1">
+      <tr>
+        <th style="width:30%">Output File</th>
+        <th>Description</th>
+      </tr>
+      <tr>
+        <td><code>movies_clean.csv</code></td>
+        <td>
+          Cleaned movie metadata.  Contains <code>MovieID</code>, cleaned
+          <code>Title</code>, extracted <code>Year</code>, and split genre columns
+          such as <code>Genre1</code>, <code>Genre2</code>, etc.
+        </td>
+      </tr>
+      <tr>
+        <td><code>movies_ratings_clean.csv</code></td>
+        <td>
+          Cleaned ratings, if <code>ratings.csv</code> exists.  Contains one rating
+          per <code>UserID</code>, <code>MovieID</code> pair.
+        </td>
+      </tr>
+      <tr>
+        <td><code>movies_tags_clean.csv</code></td>
+        <td>
+          Cleaned tags, if <code>tags.csv</code> exists.
+        </td>
+      </tr>
+      <tr>
+        <td><code>movies_cleaning_log.txt</code></td>
+        <td>
+          Text log of all major cleaning steps, dropped rows, and validation checks.
+        </td>
+      </tr>
+    </table>
+
+    <h1>
+      Main Cleaning Steps
+    </h1>
+    <ul>
+      <li>Load MovieLens 32M CSV files.</li>
+      <li>Rename columns to the project naming convention.</li>
+      <li>Remove null, blank, duplicate, and invalid rows.</li>
+      <li>Convert titles, genres, and tags to ASCII.</li>
+      <li>Extract release year from movie titles.</li>
+      <li>Fix MovieLens-style trailing articles, such as <code>Matrix, The</code>.</li>
+      <li>Remove movies with <code>(no genres listed)</code>.</li>
+      <li>Validate genre tokens against a whitelist.</li>
+      <li>Split pipe-separated genres into separate columns.</li>
+      <li>Validate ratings as half-star values in the range 0.5 to 5.0.</li>
+      <li>Remove ratings and tags that reference missing movies.</li>
+    </ul>
+
+    <h1>
+      Usage
+    </h1>
+    <p>
+      From the <code>datasets/movies-32M</code> directory, run:
+    </p>
+    <p class="file_line_structure">
+      <code>python movies_32m_preprocess.py</code>
+    </p>
+
+    <p>
+      Or import it from another script:
+    </p>
+    <p class="file_line_structure">
+      <code>
+        from movies_32m_preprocess import preprocess_movies_32m<br/>
+        movies, ratings, tags = preprocess_movies_32m()
+      </code>
+    </p>
+
+    <h1>
+      Notes
+    </h1>
+    <p>
+      Unlike the earlier 1M preprocessing script, this MovieLens 32M version does
+      not use hard-coded maximum user or movie IDs.  MovieLens 32M has much larger
+      identifiers, so the script only checks that IDs are positive integers.
+    </p>
+
+    <p>
+      The script also supports movie-only preprocessing.  This is useful when only
+      <code>movies.csv</code> is available.
+    </p>
+  </body>
+</html>

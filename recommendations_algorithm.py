@@ -6,8 +6,8 @@ from collections import Counter
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import svds
 
-RATINGS_PATH = "datasets/movies/raw/ratings.csv"
-MOVIES_PATH  = "datasets/movies/movies_clean.csv"
+RATINGS_PATH = "datasets/movies-1M/raw/ratings.csv"
+MOVIES_PATH  = "datasets/movies-1M/movies_clean.csv"
 SUBS_DIR     = "subs"
 SVD_K        = 50
 
@@ -128,7 +128,7 @@ def recommend(input_titles, movies, movie_ids, movie_factors, dq_map, franchise_
         print(f"   Found: {match.iloc[0].Title} ({int(match.iloc[0].Year)})")
 
     if len(input_ids) < 1:
-        print("No valid input movies found.")
+        print("No valid input movies-1M found.")
         return []
 
     # user profile = mean of input movie latent factors
@@ -137,7 +137,7 @@ def recommend(input_titles, movies, movie_ids, movie_factors, dq_map, franchise_
     # user's average dialogue quality preference
     user_dq = np.mean([dq_map.get(mid, 0.5) for mid in input_ids])
 
-    # score all candidate movies
+    # score all candidate movies-1M
     candidates = []
     for i, mid in enumerate(movie_ids):
         if mid in input_ids:
@@ -201,7 +201,7 @@ def main():
 
 
     while True:
-        print("\nEnter 3 movies you like (or 'quit' to exit):")
+        print("\nEnter 3 movies-1M you like (or 'quit' to exit):")
         titles = []
         for i in range(1, 4):
             t = input(f"  Movie {i}: ").strip()

@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 
 # paths
-DATA_DIR = Path("../movies")
+DATA_DIR = Path("../movies-1M")
 OUTPUT_MOVIES  = DATA_DIR / "imdb_movies_clean.csv"
 OUTPUT_RATINGS = DATA_DIR / "imdb_ratings_clean.csv"
 OUTPUT_LOG     = DATA_DIR / "imdb_cleaning_log.txt"
@@ -64,7 +64,7 @@ def validate(movies, ratings, log_lines):
     log("\n--- running checks ---", log_lines)
 
     assert movies["tconst"].duplicated().sum() == 0
-    log(f"OK: no duplicate movies ({len(movies):,} rows)", log_lines)
+    log(f"OK: no duplicate movies-1M ({len(movies):,} rows)", log_lines)
 
     assert ratings["tconst"].duplicated().sum() == 0
     log(f"OK: no duplicate ratings ({len(ratings):,} rows)", log_lines)
@@ -116,11 +116,11 @@ def preprocess_imdb(basics_path, ratings_path, min_votes=MIN_VOTES):
     ratings = ratings.drop_duplicates(subset="tconst", keep="first")
     log(f"  removed {b0 - len(basics):,} from basics, {r0 - len(ratings):,} from ratings", log_lines)
 
-    # keep only movies
-    log("\nkeeping only movies...", log_lines)
+    # keep only movies-1M
+    log("\nkeeping only movies-1M...", log_lines)
     b0 = len(basics)
     basics = basics[basics["titleType"] == "movie"].copy()
-    log(f"  kept {len(basics):,} movies, dropped {b0 - len(basics):,} other rows", log_lines)
+    log(f"  kept {len(basics):,} movies-1M, dropped {b0 - len(basics):,} other rows", log_lines)
 
     # fix types
     log("\nfixing column types...", log_lines)
@@ -184,7 +184,7 @@ def preprocess_imdb(basics_path, ratings_path, min_votes=MIN_VOTES):
     ratings_out = ratings[ratings["tconst"].isin(movies_out["tconst"])].copy()
     ratings_out["low_votes"] = ratings_out["numVotes"] < min_votes
 
-    log(f"  movies: {len(movies_out):,} rows", log_lines)
+    log(f"  movies-1M: {len(movies_out):,} rows", log_lines)
     log(f"  ratings: {len(ratings_out):,} rows", log_lines)
     show_info(movies_out,  "imdb_movies_clean", log_lines)
     show_info(ratings_out, "imdb_ratings_clean", log_lines)

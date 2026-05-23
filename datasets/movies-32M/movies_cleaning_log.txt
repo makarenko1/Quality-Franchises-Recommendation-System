@@ -1,0 +1,46 @@
+Loaded: movies-32M=87,585, ratings=32,000,204
+Loaded tags=2,000,072
+Nulls in movies-32M:
+MovieID    0
+Title      0
+Genres     0
+
+Nulls in ratings:
+UserID       0
+MovieID      0
+Rating       0
+Timestamp    0
+
+Nulls in tags:
+UserID        0
+MovieID       0
+Tag          17
+Timestamp     0
+
+movies-32M: dropped 0 null/blank rows
+movies-32M: dropped 0 duplicate rows
+movies-32M: transliterated 3175 titles and 0 genres to ASCII
+movies-32M: dropped 0 rows with invalid MovieID
+movies-32M: dropped 617 rows with malformed Title; extracted Year column
+movies-32M: dropped 6707 rows with "(no genres listed)"
+movies-32M: dropped 0 rows with unknown genre tokens
+movies-32M: dropped 0 rows with non-ASCII characters
+movies-32M: split Genres into 10 columns
+ratings: dropped 0 exact-duplicate rows
+ratings: found 0 rows in conflicting (UserID, MovieID) groups; dropped 0 to keep one rating per tuple
+ratings: dropped 0 rows with invalid values
+tags: dropped 23 null/blank rows
+tags: dropped 15 duplicate rows
+tags: transliterated 2263 tags to ASCII
+tags: dropped 39 rows with invalid values or empty tag
+ratings: dropped 83809 rows with orphan MovieID
+tags: dropped 25447 rows with orphan MovieID
+PASS: MovieID is unique in movies
+PASS: all movie genres are in the whitelist
+PASS: all movies have a valid Year
+PASS: all titles and genre columns use only ASCII characters
+PASS: all 31,916,395 ratings are half-star in [0.5, 5.0]
+PASS: all MovieIDs in ratings exist in movies
+PASS: every (UserID, MovieID) pair has exactly one rating
+PASS: all MovieIDs in tags exist in movies
+PASS: all tags use only ASCII characters
