@@ -372,9 +372,49 @@ def find_best_subtitle(title, year, language, token, api_key, base_url):
     Search OpenSubtitles and return the best subtitle result.
 
     Results are ordered by download count, descending.
+
+    Very short titles such as "M", "Pi", "Go", "It", or "Us" can make the
+    OpenSubtitles API reject the request because the query is too short. In
+    that case, this function retries with safer fallback queries that include
+    the year and/or the word "movie".
+    """
+    last_error = None
+
+    for query in build_subtitle_search_queries(title, year):
+        try:
+            results = search_subtitles_once(
+                query=query,
+                year=year,
+                language=language,
+                token=token,
+                api_key=api_key,
+                base_url=base_url,
+            )
+
+            if results:
+                return results[0]
+
+        except RuntimeError as e:
+            last_error = e
+
+            if is_query_too_short_error(e):
+                print(f"Query too short, retrying with fallback: {query}")
+                continue
+
+            raise
+
+    if last_error and is_query_too_short_error(last_error):
+        return None
+
+    return None
+
+
+def search_subtitles_once(query, year, language, token, api_key, base_url):
+    """
+    Run one OpenSubtitles search request.
     """
     params = {
-        "query": title,
+        "query": query,
         "languages": language,
         "type": "movie",
         "order_by": "download_count",
@@ -396,12 +436,113 @@ def find_best_subtitle(title, year, language, token, api_key, base_url):
             f"Subtitle search failed: {response.status_code}\n{response.text}"
         )
 
-    results = response.json().get("data", [])
+    return response.json().get("data", [])
 
-    if not results:
-        return None
 
-    return results[0]
+def build_subtitle_search_queries(title, year=None):
+    """
+    Build OpenSubtitles search queries, including fallbacks for short titles.
+
+    OpenSubtitles may reject very short queries. For those, appending the year
+    usually makes the query long enough while still keeping it specific.
+
+    Examples
+    --------
+    "M", 1931 -> ["M 1931", "M movie 1931", "M"]
+    "Pi", 1998 -> ["Pi 1998", "Pi movie 1998", "Pi"]
+    "Toy Story", 1995 -> ["Toy Story", "Toy Story 1995"]
+    """
+    title = str(title).strip()
+    normalized_title = normalize_search_query(title)
+
+    queries = []
+
+    if is_short_search_query(normalized_title):
+        if year is not None:
+            queries.extend([
+                f"{title} {year}",
+                f"{title} movie {year}",
+            ])
+
+        queries.append(title)
+    else:
+        queries.append(title)
+
+        title_without_parentheses = remove_parenthetical_text(title)
+
+        if title_without_parentheses and title_without_parentheses != title:
+            queries.append(title_without_parentheses)
+
+        if year is not None:
+            queries.append(f"{title} {year}")
+
+    return unique_non_empty_strings(queries)
+
+
+def normalize_search_query(text):
+    """
+    Normalize a search query for length checks.
+    """
+    text = str(text).lower()
+    text = re.sub(r"[^a-z0-9]+", "", text)
+    return text
+
+
+def is_short_search_query(query):
+    """
+    Return True when a query is likely too short for OpenSubtitles.
+    """
+    return len(normalize_search_query(query)) < 3
+
+
+def is_query_too_short_error(error):
+    """
+    Detect OpenSubtitles errors caused by a too-short search query.
+    """
+    message = str(error).lower()
+
+    return (
+        "query is too short" in message
+        or "query must be at least" in message
+        or "query length" in message
+    )
+
+
+def remove_parenthetical_text(title):
+    """
+    Remove parenthetical alternate titles from a movie title.
+
+    Example:
+        "Seven (a.k.a. Se7en)" -> "Seven"
+    """
+    title = str(title).strip()
+    title = re.sub(r"\s*\([^)]*\)\s*", " ", title)
+    title = re.sub(r"\s+", " ", title)
+    return title.strip()
+
+
+def unique_non_empty_strings(values):
+    """
+    Return unique non-empty strings while preserving order.
+    """
+    seen = set()
+    result = []
+
+    for value in values:
+        value = str(value).strip()
+
+        if not value:
+            continue
+
+        key = value.lower()
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        result.append(value)
+
+    return result
 
 
 def download_subtitle(subtitle, output_path, token, api_key, base_url):

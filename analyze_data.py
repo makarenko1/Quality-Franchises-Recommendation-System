@@ -21,6 +21,9 @@ Outputs:
         dialogue_feature_correlations_filtered.png
         dialogue_feature_redundancy_heatmap.png
         rating_by_genre.png
+        rating_by_year.png
+        dialogue_feature_year_correlations.png
+        dialogue_feature_by_year_<feature>.png
         analysis_summary.txt
 
 Run:
@@ -154,6 +157,19 @@ DIALOGUE_FEATURE_LABELS = {
     "flesch_reading_ease": "Flesch reading ease",
     "average_sentence_length": "Average sentence length",
 }
+
+
+YEAR_TREND_DIALOGUE_FEATURES = [
+    "repeated_line_ratio",
+    "avg_line_length",
+    "median_line_length",
+    "long_word_ratio",
+    "complex_word_ratio",
+    "subtitle_words_per_minute",
+    "num_lines_per_minute",
+    "average_sentence_length",
+    "flesch_reading_ease",
+]
 
 
 def main():
@@ -737,6 +753,9 @@ def analyze_data_quality_and_controls(dataset):
     lines.extend(analyze_runtime_and_year_controls(dataset))
     lines.append("")
 
+    lines.extend(analyze_rating_and_dialogue_by_year(dataset))
+    lines.append("")
+
     lines.extend(analyze_genre_patterns(dataset))
     lines.append("")
 
@@ -1045,6 +1064,199 @@ def get_primary_genre_series(dataset):
         return pd.Series(pd.NA, index=dataset.index)
 
     return dataset[genre_cols[0]].replace("", pd.NA)
+
+
+def analyze_rating_and_dialogue_by_year(dataset):
+    """
+    Analyze whether movie year may explain rating and dialogue-feature patterns.
+
+    This is useful because older movies, especially silent or early films, may
+    receive different IMDb ratings and have unusual subtitle/dialogue patterns.
+    """
+    lines = []
+    lines.append("Rating and dialogue features by release year:")
+
+    required_cols = {"Year", RATING_COL}
+    missing_cols = required_cols - set(dataset.columns)
+
+    if missing_cols:
+        lines.append(f"Skipped: missing columns {missing_cols}.")
+        return lines
+
+    available_features = [
+        feature for feature in YEAR_TREND_DIALOGUE_FEATURES
+        if feature in dataset.columns
+    ]
+
+    if not available_features:
+        lines.append("Skipped: no selected dialogue features found.")
+        return lines
+
+    cols = ["Year", RATING_COL] + available_features
+    df = dataset[cols].copy()
+
+    for col in cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df = df.dropna(subset=["Year"])
+    df["Year"] = df["Year"].astype(int)
+
+    # Use only years with enough movies for a meaningful yearly average.
+    yearly = (
+        df
+        .groupby("Year")
+        .agg(
+            movie_count=(RATING_COL, "count"),
+            mean_rating=(RATING_COL, "mean"),
+            **{
+                f"mean_{feature}": (feature, "mean")
+                for feature in available_features
+            }
+        )
+        .reset_index()
+    )
+
+    yearly = yearly[yearly["movie_count"] >= 10].copy()
+
+    if yearly.empty:
+        lines.append("Skipped: no year had at least 10 rated movies.")
+        return lines
+
+    year_rating_corr = yearly["Year"].corr(yearly["mean_rating"], method="pearson")
+    lines.append(
+        f"Year vs mean IMDb rating by year: Pearson={year_rating_corr:.4f}, "
+        f"years={len(yearly):,}"
+    )
+
+    lines.append("Year vs mean dialogue features by year:")
+    year_feature_rows = []
+
+    for feature in available_features:
+        mean_feature_col = f"mean_{feature}"
+        feature_df = yearly[["Year", mean_feature_col]].dropna()
+
+        if len(feature_df) < 2:
+            continue
+
+        pearson = feature_df["Year"].corr(feature_df[mean_feature_col], method="pearson")
+        spearman = feature_df["Year"].corr(feature_df[mean_feature_col], method="spearman")
+
+        year_feature_rows.append({
+            "feature": feature,
+            "pearson": pearson,
+            "spearman": spearman,
+            "n": len(feature_df),
+        })
+
+        lines.append(
+            f"  {get_feature_label(feature)}: "
+            f"Pearson={pearson:.4f}, Spearman={spearman:.4f}, "
+            f"years={len(feature_df):,}"
+        )
+
+    plot_rating_by_year(yearly)
+
+    corr_df = pd.DataFrame(year_feature_rows)
+
+    if not corr_df.empty:
+        corr_df["abs_pearson"] = corr_df["pearson"].abs()
+        plot_year_feature_correlation_bar(corr_df)
+
+    for feature in available_features:
+        mean_feature_col = f"mean_{feature}"
+
+        if mean_feature_col in yearly.columns:
+            plot_dialogue_feature_by_year(yearly, feature, mean_feature_col)
+
+    return lines
+
+
+def plot_rating_by_year(yearly):
+    """
+    Plot mean IMDb rating by release year.
+    """
+    plt.figure(figsize=(11, 6))
+    plt.plot(yearly["Year"], yearly["mean_rating"], marker="o", linewidth=1.5)
+
+    if yearly["Year"].nunique() > 1:
+        slope, intercept = np.polyfit(yearly["Year"], yearly["mean_rating"], deg=1)
+        x_line = np.linspace(yearly["Year"].min(), yearly["Year"].max(), 100)
+        y_line = slope * x_line + intercept
+        plt.plot(x_line, y_line, linewidth=2)
+
+    plt.title("Mean IMDb Rating by Release Year", fontsize=TITLE_FONT_SIZE)
+    plt.xlabel("Release year", fontsize=AXIS_LABEL_FONT_SIZE)
+    plt.ylabel("Mean IMDb rating", fontsize=AXIS_LABEL_FONT_SIZE)
+    plt.tick_params(axis="both", labelsize=TICK_FONT_SIZE)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    plt.savefig(OUTPUT_DIR / "rating_by_year.png", dpi=200)
+    plt.close()
+
+
+def plot_dialogue_feature_by_year(yearly, feature, mean_feature_col):
+    """
+    Plot a dialogue feature averaged by release year.
+    """
+    feature_label = get_feature_label(feature)
+
+    plot_df = yearly[["Year", mean_feature_col, "movie_count"]].dropna().copy()
+
+    if plot_df.empty:
+        return
+
+    plt.figure(figsize=(11, 6))
+    plt.plot(plot_df["Year"], plot_df[mean_feature_col], marker="o", linewidth=1.5)
+
+    if plot_df["Year"].nunique() > 1:
+        slope, intercept = np.polyfit(plot_df["Year"], plot_df[mean_feature_col], deg=1)
+        x_line = np.linspace(plot_df["Year"].min(), plot_df["Year"].max(), 100)
+        y_line = slope * x_line + intercept
+        plt.plot(x_line, y_line, linewidth=2)
+
+    plt.title(f"{feature_label} by Release Year", fontsize=TITLE_FONT_SIZE)
+    plt.xlabel("Release year", fontsize=AXIS_LABEL_FONT_SIZE)
+    plt.ylabel(f"Mean {feature_label.lower()}", fontsize=AXIS_LABEL_FONT_SIZE)
+    plt.tick_params(axis="both", labelsize=TICK_FONT_SIZE)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    safe_feature = re.sub(r"[^a-zA-Z0-9_]+", "_", feature)
+    plt.savefig(OUTPUT_DIR / f"dialogue_feature_by_year_{safe_feature}.png", dpi=200)
+    plt.close()
+
+
+def plot_year_feature_correlation_bar(corr_df):
+    """
+    Plot correlations between release year and yearly dialogue-feature averages.
+    """
+    corr_df = corr_df.sort_values("pearson").copy()
+
+    y = np.arange(len(corr_df))
+    height_bar = 0.35
+
+    feature_labels = [
+        get_feature_label(feature)
+        for feature in corr_df["feature"]
+    ]
+
+    plt.figure(figsize=(12, max(6, 0.45 * len(corr_df))))
+    plt.barh(y - height_bar / 2, corr_df["pearson"], height_bar, label="Pearson")
+    plt.barh(y + height_bar / 2, corr_df["spearman"], height_bar, label="Spearman")
+
+    plt.axvline(0, linewidth=1)
+    plt.yticks(y, feature_labels, fontsize=max(9, TICK_FONT_SIZE - 3))
+    plt.xticks(fontsize=TICK_FONT_SIZE)
+    plt.title("Dialogue Feature Trends by Release Year", fontsize=TITLE_FONT_SIZE)
+    plt.xlabel("Correlation with release year", fontsize=AXIS_LABEL_FONT_SIZE)
+    plt.ylabel("Dialogue feature", fontsize=AXIS_LABEL_FONT_SIZE)
+    plt.legend(fontsize=LEGEND_FONT_SIZE)
+    plt.grid(True, axis="x", alpha=0.3)
+    plt.tight_layout()
+
+    plt.savefig(OUTPUT_DIR / "dialogue_feature_year_correlations.png", dpi=200)
+    plt.close()
 
 
 def analyze_genre_patterns(dataset):
