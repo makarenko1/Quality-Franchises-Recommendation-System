@@ -2,3 +2,7 @@ datasets/opensubtitles/subs/
 datasets/opensubtitles/subs.zip
 datasets/imdb/raw/
 datasets/movies-32M/raw/
+datasets/movies-32M/raw/
+datasets/movies-32M/movies_ratings_clean.csv
+datasets/movies-32M/movies_ratings_clean.csv
+datasets/movies-32M/movies_tags_clean.csv
