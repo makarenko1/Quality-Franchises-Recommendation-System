@@ -796,12 +796,30 @@ def get_numeric_dataset(dataset, columns):
     return df
 
 
+def subtitle_feature_mask(dataset):
+    """
+    Mark rows that have extracted subtitle/dialogue features.
+
+    In the expanded 1M + 32M dataset, many movies are expected to have no
+    subtitle file. Those rows should not be counted as failed subtitle-quality
+    checks.
+    """
+    if "num_tokens" not in dataset.columns or "num_lines" not in dataset.columns:
+        return pd.Series(False, index=dataset.index)
+
+    num_tokens = pd.to_numeric(dataset["num_tokens"], errors="coerce")
+    num_lines = pd.to_numeric(dataset["num_lines"], errors="coerce")
+
+    return num_tokens.notna() | num_lines.notna()
+
+
 def subtitle_quality_mask(dataset):
     """
     Mark rows that pass basic subtitle-quality checks.
 
-    These filters remove very short, very dense, or highly repetitive subtitle
-    files that may be parsing/matching artifacts rather than real dialogue.
+    Rows without subtitle features are marked False, but they are not counted as
+    failed quality rows in analyze_subtitle_quality(). They simply have no
+    subtitle file/features.
     """
     df = get_numeric_dataset(
         dataset,
@@ -815,13 +833,13 @@ def subtitle_quality_mask(dataset):
         ],
     )
 
-    mask = pd.Series(True, index=df.index)
+    mask = subtitle_feature_mask(df)
 
     if "num_tokens" in df.columns:
-        mask &= df["num_tokens"].fillna(0) >= MIN_SUBTITLE_TOKENS
+        mask &= df["num_tokens"] >= MIN_SUBTITLE_TOKENS
 
     if "num_lines" in df.columns:
-        mask &= df["num_lines"].fillna(0) >= MIN_SUBTITLE_LINES
+        mask &= df["num_lines"] >= MIN_SUBTITLE_LINES
 
     if "subtitle_words_per_minute" in df.columns:
         mask &= (
@@ -847,15 +865,18 @@ def subtitle_quality_mask(dataset):
             | (df["hapax_ratio"] > 0)
         )
 
-    return mask
+    return mask.fillna(False)
 
 
 def analyze_subtitle_quality(dataset):
     """
-    Summarize subtitle-quality filters.
+    Summarize subtitle availability and subtitle-quality filters.
+
+    The expanded dataset contains many movies without subtitle files. Those rows
+    are reported separately and are not counted as subtitle-quality failures.
     """
     lines = []
-    lines.append("Subtitle-quality checks:")
+    lines.append("Subtitle availability and quality checks:")
 
     required_cols = {"num_tokens", "num_lines"}
     if not required_cols.issubset(set(dataset.columns)):
@@ -874,42 +895,57 @@ def analyze_subtitle_quality(dataset):
         ],
     )
 
-    mask = subtitle_quality_mask(df)
+    has_subtitles = subtitle_feature_mask(df)
+    subtitle_df = df.loc[has_subtitles].copy()
 
-    lines.append(f"Rows before subtitle-quality filtering: {len(df):,}")
-    lines.append(f"Rows passing subtitle-quality checks: {int(mask.sum()):,}")
-    lines.append(f"Rows removed by subtitle-quality checks: {int((~mask).sum()):,}")
+    if subtitle_df.empty:
+        lines.append(f"Rows in dataset: {len(df):,}")
+        lines.append("Rows with subtitle features: 0")
+        lines.append(f"Rows without subtitle features: {len(df):,}")
+        lines.append("Skipped subtitle-quality filters because no subtitle features were found.")
+        return lines
+
+    quality_mask = subtitle_quality_mask(subtitle_df)
+
+    lines.append(f"Rows in dataset: {len(df):,}")
+    lines.append(f"Rows with subtitle features: {int(has_subtitles.sum()):,}")
+    lines.append(f"Rows without subtitle features: {int((~has_subtitles).sum()):,}")
+    lines.append(f"Rows passing subtitle-quality checks: {int(quality_mask.sum()):,}")
+    lines.append(
+        "Rows removed by subtitle-quality filters among subtitle rows: "
+        f"{int((~quality_mask).sum()):,}"
+    )
 
     checks = {
         f"num_tokens < {MIN_SUBTITLE_TOKENS}": (
-            df["num_tokens"] < MIN_SUBTITLE_TOKENS
-            if "num_tokens" in df.columns
-            else pd.Series(False, index=df.index)
+            subtitle_df["num_tokens"] < MIN_SUBTITLE_TOKENS
+            if "num_tokens" in subtitle_df.columns
+            else pd.Series(False, index=subtitle_df.index)
         ),
         f"num_lines < {MIN_SUBTITLE_LINES}": (
-            df["num_lines"] < MIN_SUBTITLE_LINES
-            if "num_lines" in df.columns
-            else pd.Series(False, index=df.index)
+            subtitle_df["num_lines"] < MIN_SUBTITLE_LINES
+            if "num_lines" in subtitle_df.columns
+            else pd.Series(False, index=subtitle_df.index)
         ),
         f"subtitle_words_per_minute > {MAX_SUBTITLE_WORDS_PER_MINUTE}": (
-            df["subtitle_words_per_minute"] > MAX_SUBTITLE_WORDS_PER_MINUTE
-            if "subtitle_words_per_minute" in df.columns
-            else pd.Series(False, index=df.index)
+            subtitle_df["subtitle_words_per_minute"] > MAX_SUBTITLE_WORDS_PER_MINUTE
+            if "subtitle_words_per_minute" in subtitle_df.columns
+            else pd.Series(False, index=subtitle_df.index)
         ),
         f"repeated_line_ratio > {MAX_REPEATED_LINE_RATIO}": (
-            df["repeated_line_ratio"] > MAX_REPEATED_LINE_RATIO
-            if "repeated_line_ratio" in df.columns
-            else pd.Series(False, index=df.index)
+            subtitle_df["repeated_line_ratio"] > MAX_REPEATED_LINE_RATIO
+            if "repeated_line_ratio" in subtitle_df.columns
+            else pd.Series(False, index=subtitle_df.index)
         ),
         "type_token_ratio == 1": (
-            df["type_token_ratio"] == 1
-            if "type_token_ratio" in df.columns
-            else pd.Series(False, index=df.index)
+            subtitle_df["type_token_ratio"] == 1
+            if "type_token_ratio" in subtitle_df.columns
+            else pd.Series(False, index=subtitle_df.index)
         ),
         "hapax_ratio == 0": (
-            df["hapax_ratio"] == 0
-            if "hapax_ratio" in df.columns
-            else pd.Series(False, index=df.index)
+            subtitle_df["hapax_ratio"] == 0
+            if "hapax_ratio" in subtitle_df.columns
+            else pd.Series(False, index=subtitle_df.index)
         ),
     }
 
@@ -939,7 +975,7 @@ def analyze_dialogue_correlations_filtered(dataset):
     filtered = dataset.loc[subtitle_quality_mask(dataset)].copy()
 
     if filtered.empty:
-        lines.append("Skipped: no rows passed subtitle-quality filtering.")
+        lines.append("Skipped: no subtitle rows passed subtitle-quality filtering.")
         return lines
 
     corr_df = compute_feature_correlations(filtered, available_features)
