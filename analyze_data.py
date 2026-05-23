@@ -210,7 +210,7 @@ def load_dataset(path):
     if not path.exists():
         raise FileNotFoundError(f"{path} not found")
 
-    dataset = pd.read_csv(path)
+    dataset = pd.read_csv(path, low_memory=False)
 
     required_cols = {
         "Title",
