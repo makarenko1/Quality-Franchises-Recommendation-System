@@ -129,7 +129,7 @@ def ensure_preprocessed_datasets():
         dataset.to_csv(MAIN_DATASET, index=False)
         print(f"Saved MovieLens 32M additions to {MAIN_DATASET}")
 
-    if has_language_features(dataset):
+    if False:
         print(
             "All current language feature columns already exist for movies "
             "with subtitles, skipping OpenSubtitles preprocessing."

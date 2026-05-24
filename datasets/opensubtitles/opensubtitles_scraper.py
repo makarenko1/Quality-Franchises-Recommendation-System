@@ -732,6 +732,6 @@ if __name__ == "__main__":
     # scrape_subtitles_for_all_movie_datasets() instead.
     scrape_subtitles_for_32m_movies(
         language="en",
-        delay_seconds=1.1,
+        delay_seconds=0.2,
         limit=None,
     )
