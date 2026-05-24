@@ -98,11 +98,13 @@ def ensure_preprocessed_datasets():
         2. Ensure MovieLens 32M movie preprocessing exists.
         3. If dataset.csv does not exist, create it from all available
            MovieLens movies: 1M plus new 32M MovieIDs.
-        4. Add OpenSubtitles dialogue features when available, without dropping
+        4. If dataset.csv already exists, add new MovieLens 1M and 32M rows
+           without overwriting existing MovieIDs.
+        5. Add OpenSubtitles dialogue features when available, without dropping
            movies that have no subtitle file.
-        5. Add franchise metadata to all movies.
-        6. Add IMDb movie metadata and ratings.
-        7. Save everything back to dataset.csv.
+        6. Add franchise metadata to all movies.
+        7. Add IMDb movie metadata and ratings.
+        8. Save everything back to dataset.csv.
 
     Franchise analysis is called separately after this function.
     """
@@ -121,15 +123,23 @@ def ensure_preprocessed_datasets():
         print(f"Loading existing main dataset from {MAIN_DATASET}")
         dataset = pd.read_csv(MAIN_DATASET, low_memory=False)
 
-        dataset = remove_duplicate_movie_ids(dataset)
+        print("Adding new MovieLens 1M movies to main dataset...")
+        dataset = merge_movies_1m_into_dataset(dataset)
 
         print("Adding new MovieLens 32M movies to main dataset...")
         dataset = merge_movies_32m_into_dataset(dataset)
 
-        dataset.to_csv(MAIN_DATASET, index=False)
-        print(f"Saved MovieLens 32M additions to {MAIN_DATASET}")
+        dataset = remove_duplicate_movie_ids(dataset)
 
-    if False:
+        dataset.to_csv(MAIN_DATASET, index=False)
+        print(f"Saved MovieLens 1M and 32M additions to {MAIN_DATASET}")
+
+    movie_ids_requiring_subtitle_features = get_movie_ids_requiring_subtitle_features(
+        dataset=dataset,
+        subs_dir=SUBS_DIR,
+    )
+
+    if not movie_ids_requiring_subtitle_features:
         print(
             "All current language feature columns already exist for movies "
             "with subtitles, skipping OpenSubtitles preprocessing."
@@ -144,17 +154,23 @@ def ensure_preprocessed_datasets():
             )
         else:
             print(
-                "Preprocessing OpenSubtitles because existing subtitle feature rows "
-                "were created with an old or missing language_feature_version."
+                "Preprocessing OpenSubtitles only for subtitle files whose rows "
+                "have missing or old language features."
             )
 
-        subtitles = preprocess_opensubtitles(dataset_path=SUBS_DIR)
-
-        print("Merging subtitle features into main dataset...")
-        dataset = merge_movies_with_subtitle_features(
-            movies=dataset,
-            subtitles=subtitles,
+        subtitles = preprocess_opensubtitles(
+            dataset_path=SUBS_DIR,
+            movie_ids_to_process=movie_ids_requiring_subtitle_features,
         )
+
+        if subtitles.empty:
+            print("No subtitle files needed preprocessing.")
+        else:
+            print("Merging subtitle features into main dataset...")
+            dataset = merge_movies_with_subtitle_features(
+                movies=dataset,
+                subtitles=subtitles,
+            )
 
     print("Adding franchise metadata...")
     dataset = add_franchise_columns(dataset)
@@ -399,25 +415,15 @@ def create_all_movies_dataset(
     movies_32m_csv = Path(movies_32m_csv)
     output_path = Path(output_path)
 
-    if not movies_1m_csv.exists():
-        raise FileNotFoundError(f"{movies_1m_csv} not found")
+    dataset = pd.DataFrame(columns=["MovieID"])
 
-    movies_1m = pd.read_csv(movies_1m_csv)
-
-    if "MovieID" not in movies_1m.columns:
-        raise ValueError("Column 'MovieID' not found in MovieLens 1M dataset")
-
-    movies_1m = movies_1m.copy()
-    movies_1m["MovieID"] = pd.to_numeric(movies_1m["MovieID"], errors="coerce")
-    movies_1m = movies_1m.dropna(subset=["MovieID"]).copy()
-    movies_1m["MovieID"] = movies_1m["MovieID"].astype(int)
-    movies_1m = movies_1m.drop_duplicates(subset="MovieID", keep="first").copy()
-
-    movies_1m["MovieLens1MAvailable"] = True
-    movies_1m["MovieLens32MAvailable"] = False
+    dataset = merge_movies_1m_into_dataset(
+        dataset=dataset,
+        movies_1m_csv=movies_1m_csv,
+    )
 
     dataset = merge_movies_32m_into_dataset(
-        dataset=movies_1m,
+        dataset=dataset,
         movies_32m_csv=movies_32m_csv,
     )
 
@@ -476,6 +482,129 @@ def create_movies_with_subtitles_dataset(
     return movies_with_subs
 
 
+def merge_movielens_movies_into_dataset(
+    dataset,
+    movies_csv,
+    dataset_label,
+    availability_col,
+):
+    """
+    Add MovieLens movies to the main dataset without overwriting existing rows.
+
+    Matching is done by MovieID.
+
+    If a MovieID already exists in the dataset, the incoming row is skipped,
+    even if the incoming metadata is different. New MovieIDs are appended as new
+    rows.
+
+    Adds/refreshes:
+        - availability_col
+    """
+    movies_csv = Path(movies_csv)
+
+    if not movies_csv.exists():
+        raise FileNotFoundError(f"{movies_csv} not found")
+
+    dataset = remove_duplicate_movie_ids(dataset)
+    incoming_movies = pd.read_csv(movies_csv, low_memory=False)
+
+    if "MovieID" not in dataset.columns:
+        raise ValueError("Column 'MovieID' not found in main dataset")
+
+    if "MovieID" not in incoming_movies.columns:
+        raise ValueError(f"Column 'MovieID' not found in {dataset_label} dataset")
+
+    dataset = dataset.copy()
+    incoming_movies = incoming_movies.copy()
+
+    dataset["MovieID"] = pd.to_numeric(dataset["MovieID"], errors="coerce")
+    incoming_movies["MovieID"] = pd.to_numeric(incoming_movies["MovieID"], errors="coerce")
+
+    dataset = dataset.dropna(subset=["MovieID"]).copy()
+    incoming_movies = incoming_movies.dropna(subset=["MovieID"]).copy()
+
+    dataset["MovieID"] = dataset["MovieID"].astype(int)
+    incoming_movies["MovieID"] = incoming_movies["MovieID"].astype(int)
+
+    incoming_movies = incoming_movies.drop_duplicates(subset="MovieID", keep="first").copy()
+
+    if availability_col in dataset.columns:
+        dataset = dataset.drop(columns=[availability_col])
+
+    incoming_movie_ids = set(incoming_movies["MovieID"])
+    existing_movie_ids = set(dataset["MovieID"])
+
+    dataset[availability_col] = dataset["MovieID"].isin(incoming_movie_ids)
+
+    new_movies = incoming_movies[
+        ~incoming_movies["MovieID"].isin(existing_movie_ids)
+    ].copy()
+
+    skipped_existing = len(incoming_movies) - len(new_movies)
+
+    if new_movies.empty:
+        print(
+            f"{dataset_label} merge: "
+            f"skipped {skipped_existing:,} existing MovieIDs; "
+            "added 0 new movies."
+        )
+        return dataset
+
+    new_movies[availability_col] = True
+
+    all_columns = list(dataset.columns)
+
+    for col in new_movies.columns:
+        if col not in all_columns:
+            all_columns.append(col)
+
+    for col in all_columns:
+        if col not in dataset.columns:
+            dataset[col] = pd.NA
+
+        if col not in new_movies.columns:
+            new_movies[col] = pd.NA
+
+    dataset = pd.concat(
+        [
+            dataset[all_columns],
+            new_movies[all_columns],
+        ],
+        ignore_index=True,
+    )
+
+    print(
+        f"{dataset_label} merge: "
+        f"skipped {skipped_existing:,} existing MovieIDs; "
+        f"added {len(new_movies):,} new movies."
+    )
+
+    return dataset
+
+
+def merge_movies_1m_into_dataset(
+    dataset,
+    movies_1m_csv=MOVIES_CSV,
+):
+    """
+    Add MovieLens 1M movies to the main dataset without overwriting existing rows.
+
+    Matching is done by MovieID.
+
+    If a MovieID already exists in the dataset, the 1M row is skipped, even if
+    the 1M metadata is different. New 1M-only MovieIDs are appended as new rows.
+
+    Adds/refreshes:
+        - MovieLens1MAvailable
+    """
+    return merge_movielens_movies_into_dataset(
+        dataset=dataset,
+        movies_csv=movies_1m_csv,
+        dataset_label="MovieLens 1M",
+        availability_col="MovieLens1MAvailable",
+    )
+
+
 def merge_movies_32m_into_dataset(
     dataset,
     movies_32m_csv=MOVIES_32M_CSV,
@@ -491,100 +620,27 @@ def merge_movies_32m_into_dataset(
     Adds/refreshes:
         - MovieLens32MAvailable
     """
-    movies_32m_csv = Path(movies_32m_csv)
-
-    if not movies_32m_csv.exists():
-        raise FileNotFoundError(f"{movies_32m_csv} not found")
-
-    dataset = remove_duplicate_movie_ids(dataset)
-    movies_32m = pd.read_csv(movies_32m_csv, low_memory=False)
-
-    if "MovieID" not in dataset.columns:
-        raise ValueError("Column 'MovieID' not found in main dataset")
-
-    if "MovieID" not in movies_32m.columns:
-        raise ValueError("Column 'MovieID' not found in MovieLens 32M dataset")
-
-    dataset = dataset.copy()
-    movies_32m = movies_32m.copy()
-
-    dataset["MovieID"] = pd.to_numeric(dataset["MovieID"], errors="coerce")
-    movies_32m["MovieID"] = pd.to_numeric(movies_32m["MovieID"], errors="coerce")
-
-    dataset = dataset.dropna(subset=["MovieID"]).copy()
-    movies_32m = movies_32m.dropna(subset=["MovieID"]).copy()
-
-    dataset["MovieID"] = dataset["MovieID"].astype(int)
-    movies_32m["MovieID"] = movies_32m["MovieID"].astype(int)
-
-    movies_32m = movies_32m.drop_duplicates(subset="MovieID", keep="first").copy()
-
-    if "MovieLens32MAvailable" in dataset.columns:
-        dataset = dataset.drop(columns=["MovieLens32MAvailable"])
-
-    all_32m_movie_ids = set(movies_32m["MovieID"])
-    existing_movie_ids = set(dataset["MovieID"])
-
-    dataset["MovieLens32MAvailable"] = dataset["MovieID"].isin(all_32m_movie_ids)
-
-    new_movies_32m = movies_32m[
-        ~movies_32m["MovieID"].isin(existing_movie_ids)
-    ].copy()
-
-    skipped_existing = len(movies_32m) - len(new_movies_32m)
-
-    if new_movies_32m.empty:
-        print(
-            "MovieLens 32M merge: "
-            f"skipped {skipped_existing:,} existing MovieIDs; "
-            "added 0 new movies."
-        )
-        return dataset
-
-    if "MovieLens1MAvailable" not in new_movies_32m.columns:
-        new_movies_32m["MovieLens1MAvailable"] = False
-
-    new_movies_32m["MovieLens32MAvailable"] = True
-
-    all_columns = list(dataset.columns)
-
-    for col in new_movies_32m.columns:
-        if col not in all_columns:
-            all_columns.append(col)
-
-    for col in all_columns:
-        if col not in dataset.columns:
-            dataset[col] = pd.NA
-
-        if col not in new_movies_32m.columns:
-            new_movies_32m[col] = pd.NA
-
-    dataset = pd.concat(
-        [
-            dataset[all_columns],
-            new_movies_32m[all_columns],
-        ],
-        ignore_index=True,
+    return merge_movielens_movies_into_dataset(
+        dataset=dataset,
+        movies_csv=movies_32m_csv,
+        dataset_label="MovieLens 32M",
+        availability_col="MovieLens32MAvailable",
     )
-
-    print(
-        "MovieLens 32M merge: "
-        f"skipped {skipped_existing:,} existing MovieIDs; "
-        f"added {len(new_movies_32m):,} new movies."
-    )
-
-    return dataset
 
 
 def merge_movies_with_subtitle_features(movies, subtitles):
     """
     Merge main dataset rows with subtitle dialogue features.
 
-    Existing subtitle feature columns are removed first, so rerunning the
-    pipeline refreshes features instead of creating duplicate columns.
+    Existing subtitle feature columns are preserved. Only rows included in the
+    newly preprocessed subtitle dataframe are updated, so rerunning the pipeline
+    can refresh a subset of movies instead of recomputing all subtitle features.
     """
     movies = movies.copy()
     subtitles = subtitles.copy()
+
+    if subtitles.empty:
+        return movies
 
     if "file_name" not in subtitles.columns:
         raise ValueError("Column 'file_name' not found in subtitles dataset")
@@ -602,23 +658,34 @@ def merge_movies_with_subtitle_features(movies, subtitles):
     if not feature_cols:
         raise ValueError("No subtitle feature columns were created")
 
-    old_feature_cols = [
-        col for col in movies.columns
-        if col in SUBTITLE_FEATURE_COLUMNS
-        or col in NORMALIZED_LANGUAGE_FEATURE_COLUMNS
-        or col == LANGUAGE_FEATURE_VERSION_COL
-    ]
+    if "MovieID" not in movies.columns:
+        raise ValueError("Column 'MovieID' not found in main dataset")
 
-    movies = movies.drop(columns=old_feature_cols, errors="ignore")
+    movies["MovieID"] = pd.to_numeric(movies["MovieID"], errors="coerce")
+    movies = movies.dropna(subset=["MovieID"]).copy()
+    movies["MovieID"] = movies["MovieID"].astype(int)
+
     subtitles = subtitles[["MovieID"] + feature_cols]
+    subtitles = subtitles.drop_duplicates(subset="MovieID", keep="last")
+    subtitles = subtitles.set_index("MovieID")
 
-    dataset = movies.merge(
-        subtitles,
-        on="MovieID",
-        how="left",
-    )
+    movies = movies.set_index("MovieID", drop=False)
 
-    return dataset
+    for col in feature_cols:
+        if col not in movies.columns:
+            movies[col] = pd.NA
+
+        update_values = subtitles[col].dropna()
+        matching_index = update_values.index.intersection(movies.index)
+
+        if len(matching_index) > 0:
+            movies.loc[matching_index, col] = update_values.loc[matching_index]
+
+    movies = movies.reset_index(drop=True)
+
+    print(f"Updated subtitle features for {len(subtitles):,} movies")
+
+    return movies
 
 
 def add_franchise_columns(
@@ -932,20 +999,100 @@ def has_language_features(dataset):
     The version check is applied only to rows that actually have subtitle
     features.
     """
-    if not LANGUAGE_FEATURE_COLUMNS.issubset(set(dataset.columns)):
-        return False
-
-    subtitle_rows = dataset["num_tokens"].notna()
-
-    if not subtitle_rows.any():
-        return False
-
-    version_values = pd.to_numeric(
-        dataset.loc[subtitle_rows, LANGUAGE_FEATURE_VERSION_COL],
-        errors="coerce",
+    return not get_movie_ids_requiring_subtitle_features(
+        dataset=dataset,
+        subs_dir=SUBS_DIR,
     )
 
-    return version_values.eq(LANGUAGE_FEATURE_VERSION).all()
+
+def get_movie_ids_requiring_subtitle_features(
+    dataset,
+    subs_dir=SUBS_DIR,
+):
+    """
+    Return MovieIDs whose subtitle files should be preprocessed.
+
+    Only movies that already have a downloaded .srt file are considered.
+    A MovieID is returned when:
+        - at least one language feature column is missing from dataset.csv;
+        - the movie row is missing one or more language feature values;
+        - the movie row has an old or missing language_feature_version.
+
+    This prevents rerunning OpenSubtitles preprocessing for every subtitle file
+    when only a subset of movies needs new or refreshed language features.
+    """
+    if "MovieID" not in dataset.columns:
+        raise ValueError("Column 'MovieID' not found in main dataset")
+
+    subs_dir = Path(subs_dir)
+
+    if not subs_dir.exists():
+        raise FileNotFoundError(f"{subs_dir} not found")
+
+    subtitle_movie_ids = get_movie_ids_with_subtitle_files(subs_dir)
+
+    if not subtitle_movie_ids:
+        print("No subtitle files found.")
+        return set()
+
+    dataset = dataset.copy()
+    dataset["MovieID"] = pd.to_numeric(dataset["MovieID"], errors="coerce")
+    dataset = dataset.dropna(subset=["MovieID"]).copy()
+    dataset["MovieID"] = dataset["MovieID"].astype(int)
+
+    dataset = dataset[dataset["MovieID"].isin(subtitle_movie_ids)].copy()
+
+    if dataset.empty:
+        print("No dataset rows match downloaded subtitle files.")
+        return set()
+
+    missing_language_features = LANGUAGE_FEATURE_COLUMNS - set(dataset.columns)
+
+    if missing_language_features:
+        print(
+            "Language feature columns missing from dataset.csv; "
+            "only matching subtitle files will be preprocessed."
+        )
+        return set(dataset["MovieID"])
+
+    feature_cols_to_check = list(LANGUAGE_FEATURE_COLUMNS)
+
+    missing_feature_values = dataset[feature_cols_to_check].isna().any(axis=1)
+
+    version_values = pd.to_numeric(
+        dataset[LANGUAGE_FEATURE_VERSION_COL],
+        errors="coerce",
+    )
+    old_feature_version = ~version_values.eq(LANGUAGE_FEATURE_VERSION)
+
+    needs_features = missing_feature_values | old_feature_version
+    movie_ids = set(dataset.loc[needs_features, "MovieID"])
+
+    print(
+        "Subtitle feature preprocessing needed for "
+        f"{len(movie_ids):,} / {len(subtitle_movie_ids):,} subtitle files."
+    )
+
+    return movie_ids
+
+
+def get_movie_ids_with_subtitle_files(subs_dir=SUBS_DIR):
+    """
+    Return MovieIDs that have downloaded subtitle files.
+
+    Subtitle filenames are expected to start with MovieID, for example:
+        1_toy_story_1995.srt
+    """
+    subs_dir = Path(subs_dir)
+    movie_ids = set()
+
+    for subtitle_path in subs_dir.glob("*.srt"):
+        movie_id = extract_movie_id_from_filename(subtitle_path.name)
+
+        if movie_id is not None:
+            movie_ids.add(movie_id)
+
+    return movie_ids
 
 
 # -----------------------------
@@ -955,18 +1102,43 @@ def has_language_features(dataset):
 def preprocess_opensubtitles(
     dataset_path: str | Path = SUBS_DIR,
     limit: int | None = None,
+    movie_ids_to_process: set[int] | None = None,
 ) -> pd.DataFrame:
     """
     Preprocess downloaded OpenSubtitles .srt files.
 
     Returns one row per subtitle/movie file with numeric dialogue features only.
     Does not save full subtitle text.
+
+    Parameters
+    ----------
+    dataset_path : str or pathlib.Path
+        Directory containing downloaded .srt subtitle files.
+    limit : int or None
+        Optional maximum number of files to preprocess.
+    movie_ids_to_process : set[int] or None
+        Optional MovieID subset. If provided, only subtitle files whose filename
+        starts with one of these MovieIDs are preprocessed.
     """
     dataset_path = Path(dataset_path)
     files = list(dataset_path.rglob("*.srt"))
 
+    if movie_ids_to_process is not None:
+        movie_ids_to_process = {
+            int(movie_id)
+            for movie_id in movie_ids_to_process
+        }
+
+        files = [
+            file_path
+            for file_path in files
+            if extract_movie_id_from_filename(file_path.name) in movie_ids_to_process
+        ]
+
     if limit is not None:
         files = files[:limit]
+
+    print(f"OpenSubtitles files to preprocess: {len(files):,}")
 
     rows = []
 
