@@ -56,7 +56,7 @@ def load_dialogue_features(subs_dir):
 def load_svd_model(ratings_path):
     print("Building SVD model from ratings...")
     if ratings_path.endswith('.csv'):
-        df = pd.read_csv(ratings_path, usecols=['userId', 'movieId', 'rating'])
+        df = pd.read_csv(ratings_path, usecols=['userId', 'movieId', 'rating'], low_memory=False)
         df.columns = ['UserID', 'MovieID', 'Rating']
     else:
         ratings = []
@@ -193,7 +193,7 @@ def recommend(input_titles, movies, movie_ids, movie_factors, dq_map, franchise_
 
 def main():
     # --- Load all data ---
-    movies        = pd.read_csv(MOVIES_PATH)
+    movies        = pd.read_csv(MOVIES_PATH, low_memory=False)
     dq_map        = load_dialogue_features(SUBS_DIR)
     movie_ids, movie_factors = load_svd_model(RATINGS_PATH)
     franchise_map = detect_franchises(movies)

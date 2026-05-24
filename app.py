@@ -173,6 +173,7 @@ def load_movies():
     df = pd.read_csv(
         "datasets/movies-1M/movies_clean.csv",
         dtype={"MovieID": int, "Year": "Int64"},
+        low_memory=False
     )
     genre_cols = [c for c in df.columns if c.startswith("Genre")]
     df["genres"] = df[genre_cols].apply(

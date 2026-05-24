@@ -1,24 +1,24 @@
 Franchise and Dialogue Analysis
 ========================================
-Dataset rows: 80,346
+Dataset rows: 80,287
 
 1. Franchise installment number vs IMDb rating
 ----------------------------------------
-Franchise rows with ratings: 1,747
+Franchise rows with ratings: 1,736
 Unique franchises: 699
-Pearson correlation: -0.2658
-Spearman correlation: -0.2978
-Linear trend slope: -0.2084 IMDb rating points per installment
+Pearson correlation: -0.2669
+Spearman correlation: -0.2985
+Linear trend slope: -0.2091 IMDb rating points per installment
 Interpretation: the estimated trend is negative, which supports the hypothesis that later installments tend to score lower.
 
 Within-franchise comparison:
-Mean rating change from first installment: -0.7747
+Mean rating change from first installment: -0.7762
 Median rating change from first installment: -0.6000
-Share of later installments rated below the first: 82.15%
+Share of later installments rated below the first: 82.33%
 
 2. Dialogue features vs IMDb rating
 ----------------------------------------
-Rows with IMDb ratings: 53,920
+Rows with IMDb ratings: 53,791
 Available dialogue features:
   - Number of subtitle lines
   - Total subtitle words
@@ -60,280 +60,285 @@ Available dialogue features:
   - Average sentence length
 
 Correlations with IMDb rating:
-  Repeated subtitle line ratio: Pearson=-0.1371, Spearman=-0.1720, n=21483
-  Average subtitle line length: Pearson=0.1255, Spearman=0.1378, n=21483
-  Long-word ratio: Pearson=0.1195, Spearman=0.1277, n=21483
-  Median subtitle line length: Pearson=0.1094, Spearman=0.1124, n=21483
-  Anger word ratio: Pearson=-0.1084, Spearman=-0.1267, n=21483
-  Complex-word ratio: Pearson=0.1057, Spearman=0.1120, n=21483
-  Negative word ratio: Pearson=-0.1051, Spearman=-0.1142, n=21483
-  Second-person pronoun ratio: Pearson=-0.0950, Spearman=-0.0867, n=21483
-  First-person pronoun ratio: Pearson=-0.0894, Spearman=-0.0990, n=21483
-  Unique subtitle words: Pearson=0.0890, Spearman=0.0786, n=21483
-  Duplicate subtitle line count: Pearson=-0.0858, Spearman=-0.1233, n=21483
-  Sentiment variance: Pearson=-0.0855, Spearman=-0.0958, n=21483
-  Total subtitle words: Pearson=0.0838, Spearman=0.0625, n=21483
-  Simple-word ratio: Pearson=-0.0769, Spearman=-0.1136, n=21483
-  Subtitle lines per minute: Pearson=-0.0747, Spearman=-0.0882, n=21473
-  Most common line frequency: Pearson=-0.0710, Spearman=-0.1113, n=21483
-  Average word length: Pearson=0.0702, Spearman=0.1155, n=21483
-  Average sentiment score: Pearson=0.0666, Spearman=0.0562, n=21483
-  Unique subtitle words per minute: Pearson=-0.0505, Spearman=-0.0719, n=21473
-  Repeated three-word phrase ratio: Pearson=-0.0419, Spearman=-0.0413, n=21483
-  Sadness word ratio: Pearson=-0.0392, Spearman=-0.0654, n=21483
-  Contraction ratio: Pearson=-0.0391, Spearman=-0.0381, n=21483
-  Joy word ratio: Pearson=-0.0371, Spearman=-0.0551, n=21483
-  Repeated short phrase ratio: Pearson=-0.0297, Spearman=-0.0197, n=21483
-  Number of subtitle lines: Pearson=0.0281, Spearman=0.0147, n=21483
-  Question line ratio: Pearson=-0.0271, Spearman=-0.0156, n=21483
-  Fear word ratio: Pearson=-0.0267, Spearman=-0.0171, n=21483
-  Exclamation line ratio: Pearson=-0.0257, Spearman=-0.0494, n=21483
-  Vocabulary diversity ratio: Pearson=0.0234, Spearman=-0.0024, n=21483
-  Positive word ratio: Pearson=-0.0225, Spearman=-0.0360, n=21483
-  Most frequent word share: Pearson=0.0205, Spearman=0.0254, n=21483
-  One-time word ratio: Pearson=0.0202, Spearman=0.0111, n=21483
-  Subtitle words per minute: Pearson=-0.0199, Spearman=-0.0400, n=21473
-  Repeated two-word phrase ratio: Pearson=-0.0183, Spearman=-0.0050, n=21483
-  Flesch reading ease: Pearson=-0.0183, Spearman=-0.1252, n=21483
-  Average sentence length: Pearson=0.0133, Spearman=0.0875, n=21483
-  Non-common word ratio: Pearson=-0.0116, Spearman=-0.0225, n=21483
-  Common-word ratio: Pearson=0.0069, Spearman=0.0216, n=21483
+  Repeated subtitle line ratio: Pearson=-0.1377, Spearman=-0.1712, n=21342
+  Average subtitle line length: Pearson=0.1220, Spearman=0.1355, n=21342
+  Long-word ratio: Pearson=0.1187, Spearman=0.1274, n=21342
+  Anger word ratio: Pearson=-0.1094, Spearman=-0.1268, n=21342
+  Median subtitle line length: Pearson=0.1069, Spearman=0.1109, n=21342
+  Negative word ratio: Pearson=-0.1050, Spearman=-0.1139, n=21342
+  Complex-word ratio: Pearson=0.1049, Spearman=0.1112, n=21342
+  Second-person pronoun ratio: Pearson=-0.0944, Spearman=-0.0854, n=21342
+  Unique subtitle words: Pearson=0.0897, Spearman=0.0792, n=21342
+  First-person pronoun ratio: Pearson=-0.0884, Spearman=-0.0970, n=21342
+  Sentiment variance: Pearson=-0.0857, Spearman=-0.0958, n=21342
+  Duplicate subtitle line count: Pearson=-0.0848, Spearman=-0.1216, n=21342
+  Total subtitle words: Pearson=0.0847, Spearman=0.0637, n=21342
+  Simple-word ratio: Pearson=-0.0773, Spearman=-0.1131, n=21342
+  Subtitle lines per minute: Pearson=-0.0736, Spearman=-0.0869, n=21332
+  Most common line frequency: Pearson=-0.0694, Spearman=-0.1092, n=21342
+  Average word length: Pearson=0.0677, Spearman=0.1147, n=21342
+  Average sentiment score: Pearson=0.0666, Spearman=0.0564, n=21342
+  Unique subtitle words per minute: Pearson=-0.0506, Spearman=-0.0722, n=21332
+  Repeated three-word phrase ratio: Pearson=-0.0431, Spearman=-0.0410, n=21342
+  Sadness word ratio: Pearson=-0.0391, Spearman=-0.0653, n=21342
+  Contraction ratio: Pearson=-0.0383, Spearman=-0.0370, n=21342
+  Joy word ratio: Pearson=-0.0378, Spearman=-0.0549, n=21342
+  Repeated short phrase ratio: Pearson=-0.0301, Spearman=-0.0188, n=21342
+  Number of subtitle lines: Pearson=0.0297, Spearman=0.0166, n=21342
+  Fear word ratio: Pearson=-0.0277, Spearman=-0.0178, n=21342
+  Exclamation line ratio: Pearson=-0.0273, Spearman=-0.0503, n=21342
+  Question line ratio: Pearson=-0.0270, Spearman=-0.0156, n=21342
+  Positive word ratio: Pearson=-0.0225, Spearman=-0.0357, n=21342
+  Vocabulary diversity ratio: Pearson=0.0220, Spearman=-0.0039, n=21342
+  One-time word ratio: Pearson=0.0200, Spearman=0.0111, n=21342
+  Most frequent word share: Pearson=0.0198, Spearman=0.0252, n=21342
+  Subtitle words per minute: Pearson=-0.0196, Spearman=-0.0394, n=21332
+  Flesch reading ease: Pearson=-0.0184, Spearman=-0.1249, n=21342
+  Repeated two-word phrase ratio: Pearson=-0.0182, Spearman=-0.0038, n=21342
+  Average sentence length: Pearson=0.0134, Spearman=0.0865, n=21342
+  Non-common word ratio: Pearson=-0.0128, Spearman=-0.0235, n=21342
+  Common-word ratio: Pearson=0.0061, Spearman=0.0223, n=21342
 
-Strongest absolute Pearson relationship: Repeated subtitle line ratio (-0.1371).
+Strongest absolute Pearson relationship: Repeated subtitle line ratio (-0.1377).
 Interpretation: dialogue features show weak but non-zero relationships with IMDb rating.
 
 3. Robustness checks and diagnostics
 ----------------------------------------
 IMDb match-quality checks:
-Rows: 80,346
-Rows with IMDb rating: 53,920 (67.11%)
-Rows with IMDb title ID: 54,205 (67.46%)
+Rows: 80,287
+Rows with IMDb rating: 53,791 (67.00%)
+Rows with IMDb title ID: 54,075 (67.35%)
 Rows where MovieLens title text differs from IMDb title text: 0
 
 Subtitle availability and quality checks:
-Rows in dataset: 80,346
-Rows with subtitle features: 25,767
-Rows without subtitle features: 54,579
-Rows passing subtitle-quality checks: 25,183
-Rows removed by subtitle-quality filters among subtitle rows: 584
-  num_tokens < 500: 430
-  num_lines < 100: 398
+Rows in dataset: 80,287
+Rows with subtitle features: 25,689
+Rows without subtitle features: 54,598
+Rows passing subtitle-quality checks: 25,107
+Rows removed by subtitle-quality filters among subtitle rows: 582
+  num_tokens < 500: 429
+  num_lines < 100: 397
   subtitle_words_per_minute > 180: 53
   repeated_line_ratio > 0.4: 151
   type_token_ratio == 1: 18
   hapax_ratio == 0: 64
 
 Dialogue correlations after subtitle-quality filtering:
-Filtered rows with IMDb ratings: 21,102
+Filtered rows with IMDb ratings: 20,963
 Top filtered correlations:
-  Repeated subtitle line ratio: Pearson=-0.1608, Spearman=-0.1728, n=21102
-  Average subtitle line length: Pearson=0.1314, Spearman=0.1384, n=21102
-  Long-word ratio: Pearson=0.1227, Spearman=0.1280, n=21102
-  Negative word ratio: Pearson=-0.1145, Spearman=-0.1142, n=21102
-  Median subtitle line length: Pearson=0.1141, Spearman=0.1137, n=21102
-  Anger word ratio: Pearson=-0.1128, Spearman=-0.1296, n=21102
-  Complex-word ratio: Pearson=0.1070, Spearman=0.1113, n=21102
-  Duplicate subtitle line count: Pearson=-0.1038, Spearman=-0.1229, n=21102
-  Average word length: Pearson=0.1030, Spearman=0.1167, n=21102
-  Simple-word ratio: Pearson=-0.1022, Spearman=-0.1131, n=21102
+  Repeated subtitle line ratio: Pearson=-0.1596, Spearman=-0.1718, n=20963
+  Average subtitle line length: Pearson=0.1285, Spearman=0.1362, n=20963
+  Long-word ratio: Pearson=0.1221, Spearman=0.1276, n=20963
+  Negative word ratio: Pearson=-0.1141, Spearman=-0.1138, n=20963
+  Anger word ratio: Pearson=-0.1137, Spearman=-0.1296, n=20963
+  Median subtitle line length: Pearson=0.1123, Spearman=0.1125, n=20963
+  Complex-word ratio: Pearson=0.1061, Spearman=0.1104, n=20963
+  Duplicate subtitle line count: Pearson=-0.1021, Spearman=-0.1209, n=20963
+  Average word length: Pearson=0.1021, Spearman=0.1158, n=20963
+  Simple-word ratio: Pearson=-0.1015, Spearman=-0.1124, n=20963
 
 Runtime and release-year checks:
-  Year vs imdb_averageRating: Pearson=-0.1337, Spearman=-0.1192, n=53,920
-  imdb_runtimeMinutes vs imdb_averageRating: Pearson=0.2388, Spearman=0.2537, n=53,774
-  imdb_runtimeMinutes vs num_tokens: Pearson=0.1850, Spearman=0.1777, n=21,490
-  imdb_runtimeMinutes vs num_unique_tokens: Pearson=0.2078, Spearman=0.2176, n=21,490
-  Year vs num_tokens: Pearson=-0.0289, Spearman=-0.0417, n=25,767
+  Year vs imdb_averageRating: Pearson=-0.1333, Spearman=-0.1189, n=53,791
+  imdb_runtimeMinutes vs imdb_averageRating: Pearson=0.2389, Spearman=0.2537, n=53,645
+  imdb_runtimeMinutes vs num_tokens: Pearson=0.1852, Spearman=0.1782, n=21,348
+  imdb_runtimeMinutes vs num_unique_tokens: Pearson=0.2081, Spearman=0.2180, n=21,348
+  Year vs num_tokens: Pearson=-0.0294, Spearman=-0.0422, n=25,689
 
 Rating and dialogue features by release year:
-Year vs mean IMDb rating by year: Pearson=-0.7452, years=110
+Year vs mean IMDb rating by year: Pearson=-0.7485, years=110
 Year vs mean dialogue features by year:
-  Repeated subtitle line ratio: Pearson=0.7259, Spearman=0.7315, years=106
-  Average subtitle line length: Pearson=-0.5049, Spearman=-0.6326, years=106
-  Median subtitle line length: Pearson=-0.4649, Spearman=-0.6528, years=106
-  Long-word ratio: Pearson=-0.5667, Spearman=-0.4734, years=106
-  Complex-word ratio: Pearson=-0.4563, Spearman=-0.2672, years=106
-  Subtitle words per minute: Pearson=0.2804, Spearman=0.0160, years=104
-  Subtitle lines per minute: Pearson=0.3608, Spearman=0.0537, years=104
-  Average sentence length: Pearson=-0.0986, Spearman=-0.2190, years=106
-  Flesch reading ease: Pearson=0.2920, Spearman=0.2919, years=106
+  Repeated subtitle line ratio: Pearson=0.7260, Spearman=0.7313, years=106
+  Average subtitle line length: Pearson=-0.5126, Spearman=-0.6412, years=106
+  Median subtitle line length: Pearson=-0.4707, Spearman=-0.6478, years=106
+  Long-word ratio: Pearson=-0.5639, Spearman=-0.4719, years=106
+  Complex-word ratio: Pearson=-0.4559, Spearman=-0.2690, years=106
+  Subtitle words per minute: Pearson=0.2799, Spearman=0.0174, years=104
+  Subtitle lines per minute: Pearson=0.3606, Spearman=0.0529, years=104
+  Average sentence length: Pearson=-0.0992, Spearman=-0.2181, years=106
+  Flesch reading ease: Pearson=0.2918, Spearman=0.2923, years=106
 
 Genre checks:
 Mean IMDb rating by primary genre:
-  Documentary: mean=7.064, n=5227
-  Film-Noir: mean=6.980, n=35
-  Animation: mean=6.401, n=753
-  Drama: mean=6.393, n=15026
-  Musical: mean=6.302, n=97
-  Crime: mean=6.275, n=2979
-  War: mean=6.189, n=89
-  Adventure: mean=6.074, n=2249
-  Western: mean=6.019, n=581
-  Comedy: mean=6.008, n=12728
-  Children: mean=5.976, n=1172
-  Romance: mean=5.935, n=354
-  Mystery: mean=5.840, n=405
-  Action: mean=5.769, n=7023
-  Thriller: mean=5.485, n=976
-  Fantasy: mean=5.392, n=287
-  Sci-Fi: mean=4.841, n=431
-  Horror: mean=4.830, n=3508
+  Film-Noir: mean=7.098, n=46
+  Documentary: mean=7.064, n=5225
+  Musical: mean=6.424, n=110
+  Animation: mean=6.402, n=754
+  Drama: mean=6.394, n=15011
+  War: mean=6.261, n=93
+  Crime: mean=6.254, n=2906
+  Adventure: mean=6.052, n=2197
+  Western: mean=6.044, n=591
+  Comedy: mean=6.006, n=12670
+  Children: mean=5.965, n=1155
+  Romance: mean=5.955, n=368
+  Mystery: mean=5.886, n=419
+  Action: mean=5.767, n=6991
+  Thriller: mean=5.532, n=1018
+  Fantasy: mean=5.358, n=279
+  Sci-Fi: mean=4.912, n=449
+  Horror: mean=4.835, n=3509
 Dialogue-feature correlations by genre, selected features:
   Action:
-    Repeated subtitle line ratio: Pearson=-0.0662, n=2,827
-    Average subtitle line length: Pearson=0.1115, n=2,827
-    Median subtitle line length: Pearson=0.0750, n=2,827
-    Long-word ratio: Pearson=0.0678, n=2,827
-    Complex-word ratio: Pearson=0.0641, n=2,827
+    Repeated subtitle line ratio: Pearson=-0.0670, n=2,795
+    Average subtitle line length: Pearson=0.1203, n=2,795
+    Median subtitle line length: Pearson=0.0842, n=2,795
+    Long-word ratio: Pearson=0.0716, n=2,795
+    Complex-word ratio: Pearson=0.0664, n=2,795
   Adventure:
-    Repeated subtitle line ratio: Pearson=-0.0884, n=1,103
-    Average subtitle line length: Pearson=0.1242, n=1,103
-    Median subtitle line length: Pearson=0.1110, n=1,103
-    Long-word ratio: Pearson=0.0592, n=1,103
-    Complex-word ratio: Pearson=0.0231, n=1,103
+    Repeated subtitle line ratio: Pearson=-0.0792, n=1,051
+    Average subtitle line length: Pearson=0.1236, n=1,051
+    Median subtitle line length: Pearson=0.1066, n=1,051
+    Long-word ratio: Pearson=0.0463, n=1,051
+    Complex-word ratio: Pearson=0.0089, n=1,051
   Animation:
-    Repeated subtitle line ratio: Pearson=-0.1505, n=235
-    Average subtitle line length: Pearson=0.1299, n=235
-    Median subtitle line length: Pearson=0.1050, n=235
-    Long-word ratio: Pearson=0.1474, n=235
-    Complex-word ratio: Pearson=0.1979, n=235
+    Repeated subtitle line ratio: Pearson=-0.1494, n=236
+    Average subtitle line length: Pearson=0.1234, n=236
+    Median subtitle line length: Pearson=0.1002, n=236
+    Long-word ratio: Pearson=0.1493, n=236
+    Complex-word ratio: Pearson=0.1972, n=236
   Children:
-    Repeated subtitle line ratio: Pearson=0.0188, n=313
-    Average subtitle line length: Pearson=0.0284, n=313
-    Median subtitle line length: Pearson=0.0519, n=313
-    Long-word ratio: Pearson=0.0622, n=313
-    Complex-word ratio: Pearson=0.0505, n=313
+    Repeated subtitle line ratio: Pearson=0.0320, n=296
+    Average subtitle line length: Pearson=0.0123, n=296
+    Median subtitle line length: Pearson=0.0236, n=296
+    Long-word ratio: Pearson=0.0687, n=296
+    Complex-word ratio: Pearson=0.0647, n=296
   Comedy:
-    Repeated subtitle line ratio: Pearson=-0.1399, n=5,619
-    Average subtitle line length: Pearson=0.1236, n=5,619
-    Median subtitle line length: Pearson=0.1130, n=5,619
-    Long-word ratio: Pearson=0.1074, n=5,619
-    Complex-word ratio: Pearson=0.0826, n=5,619
+    Repeated subtitle line ratio: Pearson=-0.1386, n=5,560
+    Average subtitle line length: Pearson=0.1181, n=5,560
+    Median subtitle line length: Pearson=0.1083, n=5,560
+    Long-word ratio: Pearson=0.1041, n=5,560
+    Complex-word ratio: Pearson=0.0790, n=5,560
   Crime:
-    Repeated subtitle line ratio: Pearson=-0.1297, n=1,429
-    Average subtitle line length: Pearson=0.1323, n=1,429
-    Median subtitle line length: Pearson=0.1259, n=1,429
-    Long-word ratio: Pearson=0.0643, n=1,429
-    Complex-word ratio: Pearson=0.0502, n=1,429
+    Repeated subtitle line ratio: Pearson=-0.1161, n=1,356
+    Average subtitle line length: Pearson=0.1152, n=1,356
+    Median subtitle line length: Pearson=0.1080, n=1,356
+    Long-word ratio: Pearson=0.0598, n=1,356
+    Complex-word ratio: Pearson=0.0519, n=1,356
   Documentary:
-    Repeated subtitle line ratio: Pearson=-0.0567, n=1,298
-    Average subtitle line length: Pearson=0.0923, n=1,298
-    Median subtitle line length: Pearson=0.0909, n=1,298
-    Long-word ratio: Pearson=0.1066, n=1,298
-    Complex-word ratio: Pearson=0.1118, n=1,298
+    Repeated subtitle line ratio: Pearson=-0.0649, n=1,291
+    Average subtitle line length: Pearson=0.0890, n=1,291
+    Median subtitle line length: Pearson=0.0886, n=1,291
+    Long-word ratio: Pearson=0.1075, n=1,291
+    Complex-word ratio: Pearson=0.1124, n=1,291
   Drama:
-    Repeated subtitle line ratio: Pearson=-0.1291, n=6,512
-    Average subtitle line length: Pearson=0.0705, n=6,512
-    Median subtitle line length: Pearson=0.0584, n=6,512
-    Long-word ratio: Pearson=0.0755, n=6,512
-    Complex-word ratio: Pearson=0.0624, n=6,512
+    Repeated subtitle line ratio: Pearson=-0.1322, n=6,493
+    Average subtitle line length: Pearson=0.0672, n=6,493
+    Median subtitle line length: Pearson=0.0569, n=6,493
+    Long-word ratio: Pearson=0.0749, n=6,493
+    Complex-word ratio: Pearson=0.0625, n=6,493
   Fantasy:
-    Repeated subtitle line ratio: Pearson=-0.2256, n=90
-    Average subtitle line length: Pearson=0.1464, n=90
-    Median subtitle line length: Pearson=0.1084, n=90
-    Long-word ratio: Pearson=0.2484, n=90
-    Complex-word ratio: Pearson=0.2388, n=90
+    Repeated subtitle line ratio: Pearson=-0.1958, n=82
+    Average subtitle line length: Pearson=0.1906, n=82
+    Median subtitle line length: Pearson=0.1590, n=82
+    Long-word ratio: Pearson=0.2226, n=82
+    Complex-word ratio: Pearson=0.2433, n=82
   Horror:
-    Repeated subtitle line ratio: Pearson=-0.1203, n=1,048
-    Average subtitle line length: Pearson=0.0838, n=1,048
-    Median subtitle line length: Pearson=0.0947, n=1,048
-    Long-word ratio: Pearson=0.1300, n=1,048
-    Complex-word ratio: Pearson=0.1081, n=1,048
+    Repeated subtitle line ratio: Pearson=-0.1187, n=1,049
+    Average subtitle line length: Pearson=0.0784, n=1,049
+    Median subtitle line length: Pearson=0.0897, n=1,049
+    Long-word ratio: Pearson=0.1211, n=1,049
+    Complex-word ratio: Pearson=0.0956, n=1,049
   Musical:
-    Repeated subtitle line ratio: Pearson=-0.0910, n=93
-    Average subtitle line length: Pearson=0.0014, n=93
-    Median subtitle line length: Pearson=0.0015, n=93
-    Long-word ratio: Pearson=0.0678, n=93
-    Complex-word ratio: Pearson=0.0375, n=93
+    Repeated subtitle line ratio: Pearson=-0.0460, n=106
+    Average subtitle line length: Pearson=0.0074, n=106
+    Median subtitle line length: Pearson=-0.0430, n=106
+    Long-word ratio: Pearson=0.1349, n=106
+    Complex-word ratio: Pearson=0.1076, n=106
   Mystery:
-    Repeated subtitle line ratio: Pearson=-0.1993, n=135
-    Average subtitle line length: Pearson=0.2106, n=135
-    Median subtitle line length: Pearson=0.1808, n=135
-    Long-word ratio: Pearson=0.0675, n=135
-    Complex-word ratio: Pearson=0.0815, n=135
+    Repeated subtitle line ratio: Pearson=-0.2513, n=149
+    Average subtitle line length: Pearson=0.2656, n=149
+    Median subtitle line length: Pearson=0.2487, n=149
+    Long-word ratio: Pearson=0.0923, n=149
+    Complex-word ratio: Pearson=0.0900, n=149
   Romance:
-    Repeated subtitle line ratio: Pearson=-0.1169, n=112
-    Average subtitle line length: Pearson=0.1163, n=112
-    Median subtitle line length: Pearson=0.1189, n=112
-    Long-word ratio: Pearson=0.0757, n=112
-    Complex-word ratio: Pearson=0.0749, n=112
+    Repeated subtitle line ratio: Pearson=-0.1243, n=125
+    Average subtitle line length: Pearson=0.1338, n=125
+    Median subtitle line length: Pearson=0.1345, n=125
+    Long-word ratio: Pearson=0.0680, n=125
+    Complex-word ratio: Pearson=0.0649, n=125
   Sci-Fi:
-    Repeated subtitle line ratio: Pearson=0.1836, n=118
-    Average subtitle line length: Pearson=-0.0725, n=118
-    Median subtitle line length: Pearson=-0.0596, n=118
-    Long-word ratio: Pearson=0.0734, n=118
-    Complex-word ratio: Pearson=0.1241, n=118
+    Repeated subtitle line ratio: Pearson=0.1365, n=136
+    Average subtitle line length: Pearson=0.0041, n=136
+    Median subtitle line length: Pearson=-0.0139, n=136
+    Long-word ratio: Pearson=0.0673, n=136
+    Complex-word ratio: Pearson=0.1076, n=136
   Thriller:
-    Repeated subtitle line ratio: Pearson=-0.3017, n=235
-    Average subtitle line length: Pearson=0.2588, n=235
-    Median subtitle line length: Pearson=0.2305, n=235
-    Long-word ratio: Pearson=0.2701, n=235
-    Complex-word ratio: Pearson=0.2161, n=235
+    Repeated subtitle line ratio: Pearson=-0.2727, n=277
+    Average subtitle line length: Pearson=0.2495, n=277
+    Median subtitle line length: Pearson=0.2288, n=277
+    Long-word ratio: Pearson=0.2199, n=277
+    Complex-word ratio: Pearson=0.1573, n=277
   War:
+    Repeated subtitle line ratio: Pearson=0.1102, n=31
+    Average subtitle line length: Pearson=-0.2473, n=31
+    Median subtitle line length: Pearson=-0.2931, n=31
+    Long-word ratio: Pearson=0.0665, n=31
+    Complex-word ratio: Pearson=0.1008, n=31
   Western:
-    Repeated subtitle line ratio: Pearson=-0.0569, n=255
-    Average subtitle line length: Pearson=0.1027, n=255
-    Median subtitle line length: Pearson=0.1288, n=255
-    Long-word ratio: Pearson=-0.1368, n=255
-    Complex-word ratio: Pearson=-0.1833, n=255
+    Repeated subtitle line ratio: Pearson=-0.0699, n=264
+    Average subtitle line length: Pearson=0.0928, n=264
+    Median subtitle line length: Pearson=0.1173, n=264
+    Long-word ratio: Pearson=-0.1406, n=264
+    Complex-word ratio: Pearson=-0.1858, n=264
 
 First-vs-last franchise check:
 Comparable franchises: 514
-Mean first-installment rating: 6.5722
-Mean last-installment rating: 5.7082
-Mean last-minus-first rating difference: -0.8640
+Mean first-installment rating: 6.5753
+Mean last-installment rating: 5.7132
+Mean last-minus-first rating difference: -0.8621
 Median last-minus-first rating difference: -0.7000
 Share of franchises where last movie < first movie: 82.88%
 
 Franchise vs non-franchise comparison:
-  non-franchise movies-1M: n=78,062
-    mean imdb_averageRating: 6.1089
-    mean imdb_runtimeMinutes: 99.0219
-    mean Average subtitle line length: 4.4273
+  non-franchise movies-1M: n=78,023
+    mean imdb_averageRating: 6.1081
+    mean imdb_runtimeMinutes: 99.0186
+    mean Average subtitle line length: 4.4266
     mean Repeated subtitle line ratio: 0.1087
     mean Long-word ratio: 0.1096
-    mean Subtitle words per minute: 71.6188
-  franchise movies-1M: n=2,284
-    mean imdb_averageRating: 6.1469
-    mean imdb_runtimeMinutes: 103.7716
-    mean Average subtitle line length: 4.3687
+    mean Subtitle words per minute: 71.6796
+  franchise movies-1M: n=2,264
+    mean imdb_averageRating: 6.1496
+    mean imdb_runtimeMinutes: 103.7972
+    mean Average subtitle line length: 4.3658
     mean Repeated subtitle line ratio: 0.1141
-    mean Long-word ratio: 0.1096
-    mean Subtitle words per minute: 62.7603
+    mean Long-word ratio: 0.1091
+    mean Subtitle words per minute: 62.7548
 
 Dialogue feature redundancy:
 Highly redundant feature pairs, |r| >= 0.85:
   Flesch reading ease vs Average sentence length: r=-0.9982
   Repeated two-word phrase ratio vs Repeated short phrase ratio: r=0.9594
-  Subtitle words per minute vs Subtitle lines per minute: r=0.9369
-  Number of subtitle lines vs Total subtitle words: r=0.9360
-  Average subtitle line length vs Median subtitle line length: r=0.9167
-  Repeated three-word phrase ratio vs Repeated short phrase ratio: r=0.9158
-  Long-word ratio vs Complex-word ratio: r=0.9056
-  Number of subtitle lines vs Subtitle lines per minute: r=0.9017
-  Total subtitle words vs Subtitle words per minute: r=0.8957
+  Subtitle words per minute vs Subtitle lines per minute: r=0.9368
+  Number of subtitle lines vs Total subtitle words: r=0.9359
+  Average subtitle line length vs Median subtitle line length: r=0.9168
+  Repeated three-word phrase ratio vs Repeated short phrase ratio: r=0.9159
+  Long-word ratio vs Complex-word ratio: r=0.9054
+  Number of subtitle lines vs Subtitle lines per minute: r=0.9013
+  Total subtitle words vs Subtitle words per minute: r=0.8953
   Subtitle words per minute vs Unique subtitle words per minute: r=0.8871
   Total subtitle words vs Unique subtitle words: r=0.8751
 
 Simple regression checks:
 Franchise-only regression with controls:
-Rows used in regression: 1,083
-R-squared: 0.2595
+Rows used in regression: 1,071
+R-squared: 0.2537
 Selected coefficients:
-  FranchiseInstallment: -0.2742
-  Average subtitle line length: 0.0523
-  Repeated subtitle line ratio: 0.0070
-  Long-word ratio: 0.0782
-  Subtitle words per minute: 0.0480
-  Year: -0.1703
-  imdb_runtimeMinutes: 0.3458
+  FranchiseInstallment: -0.2799
+  Average subtitle line length: 0.0374
+  Repeated subtitle line ratio: 0.0044
+  Long-word ratio: 0.0719
+  Subtitle words per minute: 0.0438
+  Year: -0.1732
+  imdb_runtimeMinutes: 0.3524
 
 All-movies-1M dialogue-feature regression with controls:
-Rows used in regression: 21,473
-R-squared: 0.2445
+Rows used in regression: 21,332
+R-squared: 0.2421
 Selected coefficients:
-  Average subtitle line length: 0.0504
-  Repeated subtitle line ratio: -0.0365
-  Long-word ratio: 0.0119
-  Subtitle words per minute: -0.0476
-  Year: -0.1895
-  imdb_runtimeMinutes: 0.2587
+  Average subtitle line length: 0.0483
+  Repeated subtitle line ratio: -0.0377
+  Long-word ratio: 0.0103
+  Subtitle words per minute: -0.0462
+  Year: -0.1900
+  imdb_runtimeMinutes: 0.2598

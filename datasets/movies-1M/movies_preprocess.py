@@ -14,7 +14,7 @@ Expected folder structure:
         movies-1M/
             movies_preprocess.py
             raw/
-                movies-1M.dat
+                movies.dat
                 ratings.dat
                 tags.dat
 
@@ -39,7 +39,7 @@ BASE_DIR = Path(__file__).resolve().parent
 RAW_DIR = BASE_DIR / "raw"
 OUT_DIR = BASE_DIR
 
-MOVIES_DAT = RAW_DIR / "movies-1M.dat"
+MOVIES_DAT = RAW_DIR / "movies.dat"
 RATINGS_DAT = RAW_DIR / "ratings.dat"
 TAGS_DAT = RAW_DIR / "tags.dat"
 
@@ -57,6 +57,7 @@ LIGATURES = {
     "Ø": "O",
     "ß": "ss",
 }
+RAW_ENCODING = "latin-1"
 
 
 def log(message, log_lines):
@@ -186,14 +187,14 @@ def preprocess_movies(raw_dir=RAW_DIR, out_dir=OUT_DIR):
     ----------
     raw_dir : str or pathlib.Path
         Directory containing raw MovieLens files:
-        movies-1M.dat, ratings.dat, and tags.dat.
+        movies.dat, ratings.dat, and tags.dat.
     out_dir : str or pathlib.Path
         Directory where cleaned CSV files and the cleaning log are saved.
 
     Returns
     -------
     tuple[pandas.DataFrame, pandas.DataFrame, pandas.DataFrame]
-        Cleaned movies-1M, ratings, and tags DataFrames.
+        Cleaned movies, ratings, and tags DataFrames.
     """
     raw_dir = Path(raw_dir)
     out_dir = Path(out_dir)
@@ -202,12 +203,12 @@ def preprocess_movies(raw_dir=RAW_DIR, out_dir=OUT_DIR):
     log_lines = []
 
     movies = pd.read_csv(
-        raw_dir / "movies-1M.dat",
+        raw_dir / "movies.dat",
         sep="::",
         engine="python",
         header=None,
         names=["MovieID", "Title", "Genres"],
-        encoding="utf-8",
+        encoding=RAW_ENCODING
     )
 
     ratings = pd.read_csv(
@@ -216,7 +217,7 @@ def preprocess_movies(raw_dir=RAW_DIR, out_dir=OUT_DIR):
         engine="python",
         header=None,
         names=["UserID", "MovieID", "Rating", "Timestamp"],
-        encoding="utf-8",
+        encoding=RAW_ENCODING
     )
 
     tags = pd.read_csv(
@@ -225,12 +226,12 @@ def preprocess_movies(raw_dir=RAW_DIR, out_dir=OUT_DIR):
         engine="python",
         header=None,
         names=["UserID", "MovieID", "Tag", "Timestamp"],
-        encoding="utf-8",
+        encoding=RAW_ENCODING
     )
 
-    log(f"Loaded: movies-1M={len(movies):,}, ratings={len(ratings):,}, tags={len(tags):,}", log_lines)
+    log(f"Loaded: movies={len(movies):,}, ratings={len(ratings):,}, tags={len(tags):,}", log_lines)
 
-    for name, df in [("movies-1M", movies), ("ratings", ratings), ("tags", tags)]:
+    for name, df in [("movies", movies), ("ratings", ratings), ("tags", tags)]:
         log(f"Nulls in {name}:\n{df.isna().sum().to_string()}\n", log_lines)
 
     for df, cols in [

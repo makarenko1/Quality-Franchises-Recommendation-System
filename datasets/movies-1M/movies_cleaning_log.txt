@@ -16,29 +16,29 @@ MovieID      0
 Tag          0
 Timestamp    0
 
-Dropped nulls/blanks: movies=0, ratings=0, tags=0
-movies: dropped 0 duplicate rows
+Dropped nulls/blanks: movies-1M=0, ratings=0, tags=0
+movies-1M: dropped 0 duplicate rows
 ratings: dropped 0 exact-duplicate rows
 ratings: found 0 rows in conflicting (UserID, MovieID) groups; dropped 0 to keep one rating per tuple
 tags: dropped 5799 duplicate rows
-movies: transliterated 50 titles and 0 genres to ASCII
-movies: dropped 0 rows with invalid MovieID
-movies: dropped 0 rows with malformed Title; extracted Year column
-movies: dropped 0 rows with "(no genres listed)"
-movies: dropped 251 rows with unknown genre tokens
-movies: dropped 0 rows with non-ASCII characters
-movies: split Genres into 5 columns
+movies-1M: transliterated 50 titles and 0 genres to ASCII
+movies-1M: dropped 0 rows with invalid MovieID
+movies-1M: dropped 0 rows with malformed Title; extracted Year column
+movies-1M: dropped 0 rows with "(no genres listed)"
+movies-1M: dropped 251 rows with unknown genre tokens
+movies-1M: dropped 0 rows with non-ASCII characters
+movies-1M: split Genres into 5 columns
 ratings: dropped 0 rows with invalid values
 tags: transliterated  tags to ASCII
 tags: dropped 241 rows with invalid values or empty tag
 ratings: dropped 72186 rows with orphan MovieID
 tags: dropped 0 rows with orphan MovieID
-movies: dropped 176 movies with no ratings
+movies-1M: dropped 176 movies-1M with no ratings
 tags: dropped 0 additional rows orphaned by movie pruning
 PASS: all 928,023 ratings are half-star in [0.5, 5.0]
-PASS: all MovieIDs in ratings exist in movies
-PASS: all MovieIDs in tags exist in movies
+PASS: all MovieIDs in ratings exist in movies-1M
+PASS: all MovieIDs in tags exist in movies-1M
 PASS: all movie genres are in the whitelist
-PASS: all movies have a valid Year
+PASS: all movies-1M have a valid Year
 PASS: all titles, genre columns, and tags use only ASCII characters
 PASS: every (UserID, MovieID) pair has exactly one rating

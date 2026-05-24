@@ -86,9 +86,9 @@ def read_csv_utf8(path):
     path = Path(path)
 
     try:
-        return pd.read_csv(path, encoding="utf-8")
+        return pd.read_csv(path, encoding="utf-8", low_memory=False)
     except UnicodeDecodeError:
-        return pd.read_csv(path, encoding="latin-1")
+        return pd.read_csv(path, encoding="latin-1", low_memory=False)
 
 
 def to_ascii(value):
@@ -644,7 +644,7 @@ def fix_movie_titles_retroactively(
     if not input_path.exists():
         raise FileNotFoundError(f"{input_path} not found")
 
-    df = pd.read_csv(input_path)
+    df = pd.read_csv(input_path, low_memory=False)
 
     if "Title" not in df.columns:
         raise ValueError("Column 'Title' not found in dataset")

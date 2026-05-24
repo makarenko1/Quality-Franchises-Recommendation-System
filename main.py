@@ -13,9 +13,18 @@ MOVIES_32M_DIR = DATASETS_DIR / "movies-32M"
 OPENSUBTITLES_DIR = DATASETS_DIR / "opensubtitles"
 IMDB_DIR = DATASETS_DIR / "imdb"
 
+MOVIES_1M_PREPROCESS_SCRIPT = MOVIES_DIR / "movies_preprocess.py"
 MOVIES_CSV = MOVIES_DIR / "movies_clean.csv"
+
 MOVIES_32M_PREPROCESS_SCRIPT = MOVIES_32M_DIR / "movies_32m_preprocess.py"
 MOVIES_32M_CSV = MOVIES_32M_DIR / "movies_clean.csv"
+
+MOVIELENS_1M_RATINGS_CSV = MOVIES_DIR / "movies_ratings_clean.csv"
+MOVIELENS_32M_RATINGS_CSV = MOVIES_32M_DIR / "movies_ratings_clean.csv"
+
+MOVIELENS_1M_TAGS_CSV = MOVIES_DIR / "movies_tags_clean.csv"
+MOVIELENS_32M_TAGS_CSV = MOVIES_32M_DIR / "movies_tags_clean.csv"
+
 FRANCHISES_CSV = DATASETS_DIR / "franchises" / "franchises.csv"
 SUBS_DIR = OPENSUBTITLES_DIR / "subs"
 
@@ -26,6 +35,7 @@ IMDB_RATINGS_CSV = IMDB_DIR / "imdb_ratings_clean.csv"
 IMDB_LOG = IMDB_DIR / "imdb_cleaning_log.txt"
 
 MAIN_DATASET = Path("dataset.csv")
+RATINGS_AND_TAGS_DATASET = Path("dataset_ratings_and_tags.csv")
 ANALYSIS_SCRIPT = Path("analyze_data.py")
 
 LANGUAGE_FEATURE_VERSION = 2
@@ -88,189 +98,219 @@ NORMALIZED_LANGUAGE_FEATURE_COLUMNS = {
 
 LANGUAGE_FEATURE_COLUMNS = SUBTITLE_FEATURE_COLUMNS | NORMALIZED_LANGUAGE_FEATURE_COLUMNS | {LANGUAGE_FEATURE_VERSION_COL}
 
+LOG_WIDTH = 72
+
+
+def log_section(title):
+    """
+    Print a readable pipeline section header.
+    """
+    print("\n" + "=" * LOG_WIDTH)
+    print(title)
+    print("=" * LOG_WIDTH)
+
+
+def log_step(message):
+    """
+    Print a readable pipeline step message.
+    """
+    print(f"\n--- {message}")
+
+
+def log_info(message):
+    """
+    Print a readable pipeline detail message.
+    """
+    print(f"  {message}")
+
 
 def ensure_preprocessed_datasets():
     """
     Create or update the main dataset.csv.
 
     Processing order:
-        1. Ensure IMDb preprocessing exists.
-        2. Ensure MovieLens 32M movie preprocessing exists.
-        3. If dataset.csv does not exist, create it from all available
-           MovieLens movies: 1M plus new 32M MovieIDs.
-        4. If dataset.csv already exists, add new MovieLens 1M and 32M rows
-           without overwriting existing MovieIDs.
-        5. Add OpenSubtitles dialogue features when available, without dropping
-           movies that have no subtitle file.
-        6. Add franchise metadata to all movies.
-        7. Add IMDb movie metadata and ratings.
-        8. Save everything back to dataset.csv.
+        1. Ensure MovieLens 1M preprocessing exists.
+        2. Ensure MovieLens 32M preprocessing exists.
+        3. Create dataset.csv from MovieLens 1M only if it does not exist.
+           Otherwise, load the existing dataset and append only new MovieLens rows.
+        4. Append only new MovieLens 32M MovieIDs.
+        5. Ensure IMDb preprocessing exists after the MovieLens movie dataset is ready.
+        6. Append OpenSubtitles dialogue features only for movies that need them:
+           newly appended rows, rows with missing language features, or rows with
+           an outdated language feature version.
+        7. Append franchise metadata when available, without dropping non-franchise movies.
+        8. Append IMDb movie metadata and ratings when available, without dropping
+           movies that do not match IMDb.
+        9. Build dataset_ratings_and_tags.csv with both user ratings and user tags.
+        10. Save everything back to dataset.csv.
 
     Franchise analysis is called separately after this function.
     """
-    ensure_imdb_preprocessed()
+    log_section("Preparing source datasets")
+    ensure_movies_1m_preprocessed()
     ensure_movies_32m_preprocessed()
 
-    if not MAIN_DATASET.exists():
-        print("Creating main dataset from MovieLens 1M and 32M movies...")
+    log_section("Building movie-level dataset")
 
-        dataset = create_all_movies_dataset(
-            movies_1m_csv=MOVIES_CSV,
-            movies_32m_csv=MOVIES_32M_CSV,
+    if MAIN_DATASET.exists():
+        log_step(f"Loading existing movie dataset from {MAIN_DATASET}")
+        dataset = pd.read_csv(MAIN_DATASET, low_memory=False)
+        original_rows = len(dataset)
+
+        log_step("Appending missing MovieLens 1M movies")
+        before_rows = len(dataset)
+        dataset = merge_movies_1m_into_dataset(dataset)
+        log_info(f"Rows after 1M append: {len(dataset):,} (before: {before_rows:,})")
+    else:
+        log_step("Creating movie dataset from all MovieLens 1M movies")
+        dataset = create_movies_1m_dataset(
+            movies_csv=MOVIES_CSV,
             output_path=MAIN_DATASET,
         )
-    else:
-        print(f"Loading existing main dataset from {MAIN_DATASET}")
-        dataset = pd.read_csv(MAIN_DATASET, low_memory=False)
+        original_rows = 0
+        log_info(f"Rows after 1M creation: {len(dataset):,}")
 
-        print("Adding new MovieLens 1M movies to main dataset...")
-        dataset = merge_movies_1m_into_dataset(dataset)
+    log_step("Appending new MovieLens 32M movies")
+    before_rows = len(dataset)
+    dataset = merge_movies_32m_into_dataset(dataset)
+    log_info(f"Rows after 32M append: {len(dataset):,} (before: {before_rows:,})")
+    log_info(f"New movie rows added this run: {len(dataset) - original_rows:,}")
 
-        print("Adding new MovieLens 32M movies to main dataset...")
-        dataset = merge_movies_32m_into_dataset(dataset)
+    dataset.to_csv(MAIN_DATASET, index=False)
+    log_info(f"Saved MovieLens movie dataset to {MAIN_DATASET}")
 
-        dataset = remove_duplicate_movie_ids(dataset)
+    log_section("Preparing external metadata")
+    ensure_imdb_preprocessed()
 
-        dataset.to_csv(MAIN_DATASET, index=False)
-        print(f"Saved MovieLens 1M and 32M additions to {MAIN_DATASET}")
+    log_section("Appending subtitle language features")
+    movie_ids_needing_subtitles = get_movie_ids_needing_language_features(dataset)
 
-    movie_ids_requiring_subtitle_features = get_movie_ids_requiring_subtitle_features(
-        dataset=dataset,
-        subs_dir=SUBS_DIR,
-    )
-
-    if not movie_ids_requiring_subtitle_features:
-        print(
-            "All current language feature columns already exist for movies "
-            "with subtitles, skipping OpenSubtitles preprocessing."
+    if not movie_ids_needing_subtitles:
+        log_info(
+            "All available subtitle files already have current language features; "
+            "skipping OpenSubtitles preprocessing."
         )
     else:
-        missing_language_features = LANGUAGE_FEATURE_COLUMNS - set(dataset.columns)
-
-        if missing_language_features:
-            print(
-                "Preprocessing OpenSubtitles because these language features are missing: "
-                f"{sorted(missing_language_features)}"
-            )
-        else:
-            print(
-                "Preprocessing OpenSubtitles only for subtitle files whose rows "
-                "have missing or old language features."
-            )
+        log_info(
+            "Subtitle files selected for preprocessing: "
+            f"{len(movie_ids_needing_subtitles):,}"
+        )
 
         subtitles = preprocess_opensubtitles(
             dataset_path=SUBS_DIR,
-            movie_ids_to_process=movie_ids_requiring_subtitle_features,
+            movie_ids=movie_ids_needing_subtitles,
         )
 
         if subtitles.empty:
-            print("No subtitle files needed preprocessing.")
+            log_info("No selected subtitle files were preprocessed.")
         else:
-            print("Merging subtitle features into main dataset...")
+            before_rows = len(dataset)
             dataset = merge_movies_with_subtitle_features(
                 movies=dataset,
                 subtitles=subtitles,
             )
+            log_info(
+                "Rows after subtitle feature append: "
+                f"{len(dataset):,} (before: {before_rows:,})"
+            )
 
-    print("Adding franchise metadata...")
+    log_section("Appending franchise metadata")
+    before_rows = len(dataset)
     dataset = add_franchise_columns(dataset)
+    log_info(
+        "Rows after franchise metadata append: "
+        f"{len(dataset):,} (before: {before_rows:,})"
+    )
 
-    print("Adding IMDb metadata and ratings...")
+    log_section("Appending IMDb metadata")
+    before_rows = len(dataset)
     dataset = add_imdb_columns(dataset)
+    log_info(
+        "Rows after IMDb metadata append: "
+        f"{len(dataset):,} (before: {before_rows:,})"
+    )
+
+    log_section("Building recommender interaction dataset")
+    create_ratings_and_tags_dataset(
+        movie_ids=set(dataset["MovieID"]),
+        output_path=RATINGS_AND_TAGS_DATASET,
+    )
 
     dataset.to_csv(MAIN_DATASET, index=False)
-    print(f"Saved final dataset to {MAIN_DATASET}")
+
+    log_section("Done")
+    log_info(f"Saved final movie dataset to {MAIN_DATASET}")
+    log_info(f"Saved ratings-and-tags dataset to {RATINGS_AND_TAGS_DATASET}")
+    log_info(f"Final movie rows: {len(dataset):,}")
 
     return dataset
 
 
-def remove_duplicate_movie_ids(
-    dataset,
-    output_path=MAIN_DATASET,
-    keep="first",
-):
+def ensure_movies_1m_preprocessed():
     """
-    Remove duplicate MovieID rows from the main dataset.
+    Run MovieLens 1M preprocessing if cleaned files do not already exist.
 
-    This keeps one row per MovieID and deletes the duplicate copies. By default,
-    the first occurrence is preserved because existing rows may already contain
-    subtitle, franchise, or IMDb features.
+    Expected input:
+        datasets/movies-1M/raw/movies.dat
+        datasets/movies-1M/raw/ratings.dat
+        datasets/movies-1M/raw/tags.dat
 
-    Parameters
-    ----------
-    dataset : pandas.DataFrame
-        Main dataset.
-    output_path : str or pathlib.Path
-        Path where the deduplicated dataset should be saved.
-    keep : {"first", "last"}
-        Which duplicate row to preserve.
+    Expected preprocessing script:
+        datasets/movies-1M/movies_preprocess.py
 
-    Returns
-    -------
-    pandas.DataFrame
-        Dataset with unique MovieID values.
+    Outputs:
+        datasets/movies-1M/movies_clean.csv
+        datasets/movies-1M/movies_ratings_clean.csv
+        datasets/movies-1M/movies_tags_clean.csv
     """
-    if "MovieID" not in dataset.columns:
-        raise ValueError("Column 'MovieID' not found in main dataset")
+    expected_outputs = [
+        MOVIES_CSV,
+        MOVIELENS_1M_RATINGS_CSV,
+        MOVIELENS_1M_TAGS_CSV,
+    ]
 
-    dataset = dataset.copy()
+    if all(path.exists() for path in expected_outputs):
+        print("Found existing MovieLens 1M processed files, skipping 1M preprocessing.")
+        return
 
-    before = len(dataset)
+    print("Preprocessing MovieLens 1M...")
 
-    dataset["MovieID"] = pd.to_numeric(dataset["MovieID"], errors="coerce")
-    dataset = dataset.dropna(subset=["MovieID"]).copy()
-    dataset["MovieID"] = dataset["MovieID"].astype(int)
+    if not MOVIES_1M_PREPROCESS_SCRIPT.exists():
+        raise FileNotFoundError(f"{MOVIES_1M_PREPROCESS_SCRIPT} not found")
 
-    invalid_movie_ids_removed = before - len(dataset)
-
-    duplicate_mask = dataset.duplicated(subset="MovieID", keep=keep)
-    duplicate_count = int(duplicate_mask.sum())
-
-    if duplicate_count == 0 and invalid_movie_ids_removed == 0:
-        print("No duplicate MovieID rows found.")
-        return dataset
-
-    dataset = dataset.drop_duplicates(subset="MovieID", keep=keep).copy()
-
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    dataset.to_csv(output_path, index=False)
-
-    if invalid_movie_ids_removed:
-        print(f"Removed {invalid_movie_ids_removed} rows with invalid MovieID")
-
-    print(
-        f"Removed {duplicate_count} duplicate MovieID rows; "
-        f"kept {len(dataset):,} unique movies."
+    spec = importlib.util.spec_from_file_location(
+        "movies_1m_preprocess",
+        MOVIES_1M_PREPROCESS_SCRIPT,
     )
-    print(f"Saved deduplicated dataset to {output_path}")
 
-    return dataset
+    movies_1m_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(movies_1m_module)
 
+    if not hasattr(movies_1m_module, "preprocess_movies"):
+        raise AttributeError(
+            f"{MOVIES_1M_PREPROCESS_SCRIPT} must define preprocess_movies()"
+        )
 
-def remove_duplicate_movie_ids_from_file(
-    input_path=MAIN_DATASET,
-    output_path=MAIN_DATASET,
-    keep="first",
-):
-    """
-    Remove duplicate MovieID rows directly from dataset.csv.
-
-    This is useful if dataset.csv already exists and you want to clean it
-    without rerunning the full preprocessing pipeline.
-    """
-    input_path = Path(input_path)
-
-    if not input_path.exists():
-        raise FileNotFoundError(f"{input_path} not found")
-
-    dataset = pd.read_csv(input_path)
-
-    return remove_duplicate_movie_ids(
-        dataset=dataset,
-        output_path=output_path,
-        keep=keep,
+    movies_1m_module.preprocess_movies(
+        raw_dir=MOVIES_DIR / "raw",
+        out_dir=MOVIES_DIR,
     )
+
+    missing_outputs = [
+        path
+        for path in expected_outputs
+        if not path.exists()
+    ]
+
+    if missing_outputs:
+        raise FileNotFoundError(
+            "MovieLens 1M preprocessing finished but these outputs were not created: "
+            f"{missing_outputs}"
+        )
+
+    print(f"Saved MovieLens 1M movies to {MOVIES_CSV}")
+    print(f"Saved MovieLens 1M ratings to {MOVIELENS_1M_RATINGS_CSV}")
+    print(f"Saved MovieLens 1M tags to {MOVIELENS_1M_TAGS_CSV}")
 
 
 def ensure_imdb_preprocessed():
@@ -342,22 +382,32 @@ def ensure_imdb_preprocessed():
 
 def ensure_movies_32m_preprocessed():
     """
-    Run MovieLens 32M movie preprocessing if movies_clean.csv does not exist.
+    Run MovieLens 32M preprocessing if cleaned files do not already exist.
 
     Expected input:
         datasets/movies-32M/raw/movies.csv
+        datasets/movies-32M/raw/ratings.csv
+        datasets/movies-32M/raw/tags.csv
 
     Expected preprocessing script:
         datasets/movies-32M/movies_32m_preprocess.py
 
-    Output:
+    Outputs:
         datasets/movies-32M/movies_clean.csv
+        datasets/movies-32M/movies_ratings_clean.csv
+        datasets/movies-32M/movies_tags_clean.csv
     """
-    if MOVIES_32M_CSV.exists():
-        print("Found existing MovieLens 32M processed movies, skipping 32M preprocessing.")
+    expected_outputs = [
+        MOVIES_32M_CSV,
+        MOVIELENS_32M_RATINGS_CSV,
+        MOVIELENS_32M_TAGS_CSV,
+    ]
+
+    if all(path.exists() for path in expected_outputs):
+        print("Found existing MovieLens 32M processed files, skipping 32M preprocessing.")
         return
 
-    print("Preprocessing MovieLens 32M movies...")
+    print("Preprocessing MovieLens 32M...")
 
     if not MOVIES_32M_PREPROCESS_SCRIPT.exists():
         raise FileNotFoundError(f"{MOVIES_32M_PREPROCESS_SCRIPT} not found")
@@ -388,50 +438,155 @@ def ensure_movies_32m_preprocessed():
         drop_movies_without_ratings=False,
     )
 
-    if not MOVIES_32M_CSV.exists():
+    missing_outputs = [
+        path
+        for path in expected_outputs
+        if not path.exists()
+    ]
+
+    if missing_outputs:
         raise FileNotFoundError(
-            f"MovieLens 32M preprocessing finished but {MOVIES_32M_CSV} was not created"
+            "MovieLens 32M preprocessing finished but these outputs were not created: "
+            f"{missing_outputs}"
         )
 
     print(f"Saved MovieLens 32M movies to {MOVIES_32M_CSV}")
+    print(f"Saved MovieLens 32M ratings to {MOVIELENS_32M_RATINGS_CSV}")
+    print(f"Saved MovieLens 32M tags to {MOVIELENS_32M_TAGS_CSV}")
 
 
-def create_all_movies_dataset(
-    movies_1m_csv=MOVIES_CSV,
-    movies_32m_csv=MOVIES_32M_CSV,
+def create_movies_1m_dataset(
+    movies_csv=MOVIES_CSV,
     output_path=MAIN_DATASET,
 ):
     """
-    Create dataset.csv from all available MovieLens movies.
+    Create dataset.csv from all cleaned MovieLens 1M movies.
 
-    The base dataset starts with cleaned MovieLens 1M movies, then appends only
-    MovieLens 32M rows whose MovieID is not already present. Existing 1M rows are
-    preserved even if 32M has different metadata for the same MovieID.
-
-    This makes franchise and IMDb analysis run on all available movies, not only
-    movies that already have subtitles.
+    This is the main movie-level dataset for the recommender system. Movies are
+    kept even when no subtitle file exists; subtitle features are merged later
+    only for movies with downloaded subtitles.
     """
-    movies_1m_csv = Path(movies_1m_csv)
-    movies_32m_csv = Path(movies_32m_csv)
+    movies_csv = Path(movies_csv)
     output_path = Path(output_path)
 
-    dataset = pd.DataFrame(columns=["MovieID"])
+    if not movies_csv.exists():
+        raise FileNotFoundError(f"{movies_csv} not found")
 
-    dataset = merge_movies_1m_into_dataset(
-        dataset=dataset,
-        movies_1m_csv=movies_1m_csv,
-    )
+    movies = pd.read_csv(movies_csv, low_memory=False)
 
-    dataset = merge_movies_32m_into_dataset(
-        dataset=dataset,
-        movies_32m_csv=movies_32m_csv,
-    )
+    if "MovieID" not in movies.columns:
+        raise ValueError("Column 'MovieID' not found in movies-1M dataset")
+
+    movies = movies.copy()
+    movies["MovieID"] = pd.to_numeric(movies["MovieID"], errors="coerce")
+    movies = movies.dropna(subset=["MovieID"]).copy()
+    movies["MovieID"] = movies["MovieID"].astype(int)
+    movies = movies.drop_duplicates(subset="MovieID", keep="first").copy()
+
+    movies["MovieLens1MAvailable"] = True
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    dataset.to_csv(output_path, index=False)
+    movies.to_csv(output_path, index=False)
 
-    print(f"Saved all-movies base dataset to {output_path}")
-    print(f"Base dataset rows: {len(dataset):,}")
+    log_info(f"Saved {len(movies):,} MovieLens 1M movies to {output_path}")
+
+    return movies
+
+
+def merge_movies_1m_into_dataset(
+    dataset,
+    movies_1m_csv=MOVIES_CSV,
+):
+    """
+    Add missing MovieLens 1M movies to the main dataset.
+
+    Existing MovieIDs are kept unchanged. Only MovieLens 1M rows whose MovieID
+    is not already present in dataset.csv are appended.
+    """
+    movies_1m_csv = Path(movies_1m_csv)
+
+    if not movies_1m_csv.exists():
+        raise FileNotFoundError(f"{movies_1m_csv} not found")
+
+    dataset = dataset.copy()
+    movies_1m = pd.read_csv(movies_1m_csv, low_memory=False)
+
+    if "MovieID" not in dataset.columns:
+        raise ValueError("Column 'MovieID' not found in main dataset")
+
+    if "MovieID" not in movies_1m.columns:
+        raise ValueError("Column 'MovieID' not found in MovieLens 1M dataset")
+
+    dataset["MovieID"] = pd.to_numeric(dataset["MovieID"], errors="coerce")
+    movies_1m["MovieID"] = pd.to_numeric(movies_1m["MovieID"], errors="coerce")
+
+    dataset = dataset.dropna(subset=["MovieID"]).copy()
+    movies_1m = movies_1m.dropna(subset=["MovieID"]).copy()
+
+    dataset["MovieID"] = dataset["MovieID"].astype(int)
+    movies_1m["MovieID"] = movies_1m["MovieID"].astype(int)
+
+    before_dedup = len(dataset)
+    dataset = dataset.drop_duplicates(subset="MovieID", keep="first").copy()
+    removed_duplicates = before_dedup - len(dataset)
+
+    if removed_duplicates:
+        print(
+            f"Removed {removed_duplicates:,} duplicate MovieID rows before 1M merge."
+        )
+
+    movies_1m = movies_1m.drop_duplicates(subset="MovieID", keep="first").copy()
+
+    existing_movie_ids = set(dataset["MovieID"])
+    movies_1m_ids = set(movies_1m["MovieID"])
+
+    if "MovieLens1MAvailable" in dataset.columns:
+        dataset = dataset.drop(columns=["MovieLens1MAvailable"])
+
+    dataset["MovieLens1MAvailable"] = dataset["MovieID"].isin(movies_1m_ids)
+
+    new_movies_1m = movies_1m[
+        ~movies_1m["MovieID"].isin(existing_movie_ids)
+    ].copy()
+
+    skipped_existing = len(movies_1m) - len(new_movies_1m)
+
+    if new_movies_1m.empty:
+        print(
+            "MovieLens 1M merge: "
+            f"skipped {skipped_existing:,} existing MovieIDs; "
+            "added 0 new movies."
+        )
+        return dataset
+
+    new_movies_1m["MovieLens1MAvailable"] = True
+
+    all_columns = list(dataset.columns)
+
+    for col in new_movies_1m.columns:
+        if col not in all_columns:
+            all_columns.append(col)
+
+    for col in all_columns:
+        if col not in dataset.columns:
+            dataset[col] = pd.NA
+
+        if col not in new_movies_1m.columns:
+            new_movies_1m[col] = pd.NA
+
+    dataset = pd.concat(
+        [
+            dataset[all_columns],
+            new_movies_1m[all_columns],
+        ],
+        ignore_index=True,
+    )
+
+    print(
+        "MovieLens 1M merge: "
+        f"skipped {skipped_existing:,} existing MovieIDs; "
+        f"added {len(new_movies_1m):,} new movies."
+    )
 
     return dataset
 
@@ -442,11 +597,7 @@ def create_movies_with_subtitles_dataset(
     output_path=MAIN_DATASET,
 ):
     """
-    Create a filtered movies dataset containing only movies with subtitles.
-
-    This helper is kept for optional subtitle-only experiments. The main project
-    pipeline now uses create_all_movies_dataset() so franchise analysis can run
-    on all available 1M and 32M movies.
+    Create dataset.csv containing only movies-1M that have downloaded subtitles.
     """
     movies_csv = Path(movies_csv)
     subs_dir = Path(subs_dir)
@@ -458,7 +609,7 @@ def create_movies_with_subtitles_dataset(
     if not subs_dir.exists():
         raise FileNotFoundError(f"{subs_dir} not found")
 
-    movies = pd.read_csv(movies_csv)
+    movies = pd.read_csv(movies_csv, low_memory=False)
 
     if "MovieID" not in movies.columns:
         raise ValueError("Column 'MovieID' not found in movies-1M dataset")
@@ -482,79 +633,87 @@ def create_movies_with_subtitles_dataset(
     return movies_with_subs
 
 
-def merge_movielens_movies_into_dataset(
+def merge_movies_32m_into_dataset(
     dataset,
-    movies_csv,
-    dataset_label,
-    availability_col,
+    movies_32m_csv=MOVIES_32M_CSV,
 ):
     """
-    Add MovieLens movies to the main dataset without overwriting existing rows.
+    Merge MovieLens 32M movie metadata into the main dataset.
 
-    Matching is done by MovieID.
+    Matching is done by MovieID. Existing MovieIDs are kept unchanged, even if
+    MovieLens 32M has different metadata for the same MovieID. Only new 32M
+    MovieIDs that are not already present in dataset.csv are appended.
 
-    If a MovieID already exists in the dataset, the incoming row is skipped,
-    even if the incoming metadata is different. New MovieIDs are appended as new
-    rows.
-
-    Adds/refreshes:
-        - availability_col
+    Adds:
+        - MovieLens32MAvailable
     """
-    movies_csv = Path(movies_csv)
+    movies_32m_csv = Path(movies_32m_csv)
 
-    if not movies_csv.exists():
-        raise FileNotFoundError(f"{movies_csv} not found")
+    if not movies_32m_csv.exists():
+        raise FileNotFoundError(f"{movies_32m_csv} not found")
 
-    dataset = remove_duplicate_movie_ids(dataset)
-    incoming_movies = pd.read_csv(movies_csv, low_memory=False)
+    dataset = dataset.copy()
+    movies_32m = pd.read_csv(movies_32m_csv, low_memory=False)
 
     if "MovieID" not in dataset.columns:
         raise ValueError("Column 'MovieID' not found in main dataset")
 
-    if "MovieID" not in incoming_movies.columns:
-        raise ValueError(f"Column 'MovieID' not found in {dataset_label} dataset")
-
-    dataset = dataset.copy()
-    incoming_movies = incoming_movies.copy()
+    if "MovieID" not in movies_32m.columns:
+        raise ValueError("Column 'MovieID' not found in MovieLens 32M dataset")
 
     dataset["MovieID"] = pd.to_numeric(dataset["MovieID"], errors="coerce")
-    incoming_movies["MovieID"] = pd.to_numeric(incoming_movies["MovieID"], errors="coerce")
+    movies_32m["MovieID"] = pd.to_numeric(movies_32m["MovieID"], errors="coerce")
 
     dataset = dataset.dropna(subset=["MovieID"]).copy()
-    incoming_movies = incoming_movies.dropna(subset=["MovieID"]).copy()
+    movies_32m = movies_32m.dropna(subset=["MovieID"]).copy()
 
     dataset["MovieID"] = dataset["MovieID"].astype(int)
-    incoming_movies["MovieID"] = incoming_movies["MovieID"].astype(int)
+    movies_32m["MovieID"] = movies_32m["MovieID"].astype(int)
 
-    incoming_movies = incoming_movies.drop_duplicates(subset="MovieID", keep="first").copy()
+    before_dedup = len(dataset)
+    dataset = dataset.drop_duplicates(subset="MovieID", keep="first").copy()
+    removed_duplicates = before_dedup - len(dataset)
 
-    if availability_col in dataset.columns:
-        dataset = dataset.drop(columns=[availability_col])
+    if removed_duplicates:
+        print(
+            f"Removed {removed_duplicates:,} duplicate MovieID rows before 32M merge."
+        )
 
-    incoming_movie_ids = set(incoming_movies["MovieID"])
+    movies_32m = movies_32m.drop_duplicates(subset="MovieID", keep="first").copy()
+
+    old_32m_cols = [
+        col for col in dataset.columns
+        if col.endswith("_32M")
+    ]
+    dataset = dataset.drop(columns=old_32m_cols, errors="ignore")
+
     existing_movie_ids = set(dataset["MovieID"])
+    movies_32m_ids = set(movies_32m["MovieID"])
 
-    dataset[availability_col] = dataset["MovieID"].isin(incoming_movie_ids)
+    if "MovieLens32MAvailable" in dataset.columns:
+        dataset = dataset.drop(columns=["MovieLens32MAvailable"])
 
-    new_movies = incoming_movies[
-        ~incoming_movies["MovieID"].isin(existing_movie_ids)
+    dataset["MovieLens32MAvailable"] = dataset["MovieID"].isin(movies_32m_ids)
+
+    new_movies_32m = movies_32m[
+        ~movies_32m["MovieID"].isin(existing_movie_ids)
     ].copy()
 
-    skipped_existing = len(incoming_movies) - len(new_movies)
+    skipped_existing = len(movies_32m) - len(new_movies_32m)
 
-    if new_movies.empty:
+    if new_movies_32m.empty:
         print(
-            f"{dataset_label} merge: "
+            "MovieLens 32M merge: "
             f"skipped {skipped_existing:,} existing MovieIDs; "
             "added 0 new movies."
         )
         return dataset
 
-    new_movies[availability_col] = True
+    new_movies_32m["MovieLens32MAvailable"] = True
 
     all_columns = list(dataset.columns)
 
-    for col in new_movies.columns:
+    for col in new_movies_32m.columns:
         if col not in all_columns:
             all_columns.append(col)
 
@@ -562,79 +721,32 @@ def merge_movielens_movies_into_dataset(
         if col not in dataset.columns:
             dataset[col] = pd.NA
 
-        if col not in new_movies.columns:
-            new_movies[col] = pd.NA
+        if col not in new_movies_32m.columns:
+            new_movies_32m[col] = pd.NA
 
     dataset = pd.concat(
         [
             dataset[all_columns],
-            new_movies[all_columns],
+            new_movies_32m[all_columns],
         ],
         ignore_index=True,
     )
 
     print(
-        f"{dataset_label} merge: "
+        "MovieLens 32M merge: "
         f"skipped {skipped_existing:,} existing MovieIDs; "
-        f"added {len(new_movies):,} new movies."
+        f"added {len(new_movies_32m):,} new movies."
     )
 
     return dataset
 
 
-def merge_movies_1m_into_dataset(
-    dataset,
-    movies_1m_csv=MOVIES_CSV,
-):
-    """
-    Add MovieLens 1M movies to the main dataset without overwriting existing rows.
-
-    Matching is done by MovieID.
-
-    If a MovieID already exists in the dataset, the 1M row is skipped, even if
-    the 1M metadata is different. New 1M-only MovieIDs are appended as new rows.
-
-    Adds/refreshes:
-        - MovieLens1MAvailable
-    """
-    return merge_movielens_movies_into_dataset(
-        dataset=dataset,
-        movies_csv=movies_1m_csv,
-        dataset_label="MovieLens 1M",
-        availability_col="MovieLens1MAvailable",
-    )
-
-
-def merge_movies_32m_into_dataset(
-    dataset,
-    movies_32m_csv=MOVIES_32M_CSV,
-):
-    """
-    Add MovieLens 32M movies to the main dataset without overwriting existing rows.
-
-    Matching is done by MovieID.
-
-    If a MovieID already exists in the dataset, the 32M row is skipped, even if
-    the 32M metadata is different. New 32M-only MovieIDs are appended as new rows.
-
-    Adds/refreshes:
-        - MovieLens32MAvailable
-    """
-    return merge_movielens_movies_into_dataset(
-        dataset=dataset,
-        movies_csv=movies_32m_csv,
-        dataset_label="MovieLens 32M",
-        availability_col="MovieLens32MAvailable",
-    )
-
-
 def merge_movies_with_subtitle_features(movies, subtitles):
     """
-    Merge main dataset rows with subtitle dialogue features.
+    Merge subtitle dialogue features into the main dataset.
 
-    Existing subtitle feature columns are preserved. Only rows included in the
-    newly preprocessed subtitle dataframe are updated, so rerunning the pipeline
-    can refresh a subset of movies instead of recomputing all subtitle features.
+    Movies without subtitle files are kept. Existing subtitle feature columns are
+    refreshed only for MovieIDs present in the subtitle dataframe.
     """
     movies = movies.copy()
     subtitles = subtitles.copy()
@@ -645,8 +757,11 @@ def merge_movies_with_subtitle_features(movies, subtitles):
     if "file_name" not in subtitles.columns:
         raise ValueError("Column 'file_name' not found in subtitles dataset")
 
+    if "MovieID" not in movies.columns:
+        raise ValueError("Column 'MovieID' not found in main dataset")
+
     subtitles["MovieID"] = subtitles["file_name"].apply(extract_movie_id_from_filename)
-    subtitles = subtitles.dropna(subset=["MovieID"])
+    subtitles = subtitles.dropna(subset=["MovieID"]).copy()
     subtitles["MovieID"] = subtitles["MovieID"].astype(int)
 
     feature_cols = [
@@ -657,9 +772,6 @@ def merge_movies_with_subtitle_features(movies, subtitles):
 
     if not feature_cols:
         raise ValueError("No subtitle feature columns were created")
-
-    if "MovieID" not in movies.columns:
-        raise ValueError("Column 'MovieID' not found in main dataset")
 
     movies["MovieID"] = pd.to_numeric(movies["MovieID"], errors="coerce")
     movies = movies.dropna(subset=["MovieID"]).copy()
@@ -683,7 +795,8 @@ def merge_movies_with_subtitle_features(movies, subtitles):
 
     movies = movies.reset_index(drop=True)
 
-    print(f"Updated subtitle features for {len(subtitles):,} movies")
+    log_info(f"Updated subtitle features for {len(subtitles):,} subtitle files")
+    log_info(f"Movies kept after subtitle merge: {len(movies):,}")
 
     return movies
 
@@ -765,6 +878,11 @@ def add_franchise_columns(
         }
     )
 
+    franchise_lookup = franchise_lookup.drop_duplicates(
+        subset=["match_title", "match_year"],
+        keep="first",
+    )
+
     movies = movies.merge(
         franchise_lookup,
         on=["match_title", "match_year"],
@@ -773,8 +891,8 @@ def add_franchise_columns(
 
     movies = movies.drop(columns=["match_title", "match_year"])
 
-    print("Added franchise metadata")
-    print(f"Franchise movies: {movies['FranchiseID'].notna().sum()}")
+    log_info("Added franchise metadata")
+    log_info(f"Franchise movies matched: {movies['FranchiseID'].notna().sum():,}")
 
     return movies
 
@@ -906,8 +1024,8 @@ def add_imdb_columns(
 
     dataset = add_normalized_language_features(dataset)
 
-    print("Added IMDb metadata")
-    print(f"IMDb matches: {dataset['imdb_tconst'].notna().sum()}")
+    log_info("Added IMDb metadata")
+    log_info(f"IMDb matches: {dataset['imdb_tconst'].notna().sum():,}")
 
     return dataset
 
@@ -959,6 +1077,314 @@ def add_normalized_language_features(dataset):
     return dataset
 
 
+def create_ratings_and_tags_dataset(
+    movie_ids,
+    output_path=RATINGS_AND_TAGS_DATASET,
+):
+    """
+    Create one final recommender interaction dataset.
+
+    The output file, dataset_ratings_and_tags.csv, contains both:
+        - explicit MovieLens user ratings;
+        - optional MovieLens user tags.
+
+    The movie-level metadata remains in dataset.csv. This file contains
+    user-item interactions for the recommender system.
+    """
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    movie_ids = {
+        int(movie_id)
+        for movie_id in movie_ids
+        if pd.notna(movie_id)
+    }
+
+    if not movie_ids:
+        raise ValueError("No movie IDs were provided for the ratings-and-tags dataset")
+
+    if output_path.exists():
+        output_path.unlink()
+
+    wrote_any_rows = False
+    total_rows = 0
+
+    rating_sources = [
+        ("MovieLens 1M", MOVIELENS_1M_RATINGS_CSV),
+        ("MovieLens 32M", MOVIELENS_32M_RATINGS_CSV),
+    ]
+
+    for source_name, ratings_path in rating_sources:
+        ratings_path = Path(ratings_path)
+
+        if not ratings_path.exists():
+            print(f"{ratings_path} not found for {source_name}; skipping.")
+            continue
+
+        rows_written = append_filtered_ratings_as_events(
+            ratings_path=ratings_path,
+            movie_ids=movie_ids,
+            source_name=source_name,
+            output_path=output_path,
+            write_header=not wrote_any_rows,
+        )
+
+        if rows_written > 0:
+            wrote_any_rows = True
+            total_rows += rows_written
+
+        print(f"{source_name} ratings kept: {rows_written:,}")
+
+    tag_sources = [
+        ("MovieLens 1M", MOVIELENS_1M_TAGS_CSV),
+        ("MovieLens 32M", MOVIELENS_32M_TAGS_CSV),
+    ]
+
+    for source_name, tags_path in tag_sources:
+        tags_path = Path(tags_path)
+
+        if not tags_path.exists():
+            print(f"{tags_path} not found for {source_name}; skipping.")
+            continue
+
+        rows_written = append_filtered_tags_as_events(
+            tags_path=tags_path,
+            movie_ids=movie_ids,
+            source_name=source_name,
+            output_path=output_path,
+            write_header=not wrote_any_rows,
+        )
+
+        if rows_written > 0:
+            wrote_any_rows = True
+            total_rows += rows_written
+
+        print(f"{source_name} tags kept: {rows_written:,}")
+
+    if not wrote_any_rows:
+        empty_columns = [
+            "UserID",
+            "MovieID",
+            "InteractionType",
+            "Rating",
+            "Tag",
+            "Timestamp",
+            "SourceDataset",
+        ]
+        pd.DataFrame(columns=empty_columns).to_csv(output_path, index=False)
+        print("No ratings or tags matched the movie-level dataset.")
+    else:
+        print(f"Total ratings and tags saved to {output_path}: {total_rows:,}")
+
+    return output_path
+
+
+def append_filtered_ratings_as_events(
+    ratings_path,
+    movie_ids,
+    source_name,
+    output_path,
+    write_header,
+    chunksize=500_000,
+):
+    """
+    Append ratings for selected MovieIDs to dataset_ratings_and_tags.csv.
+
+    Large MovieLens 32M rating files are processed in chunks to avoid loading
+    the full file into memory.
+    """
+    ratings_path = Path(ratings_path)
+    total_written = 0
+
+    if ratings_path.stat().st_size == 0:
+        print(f"{ratings_path} is empty; skipping ratings from this file.")
+        return 0
+
+    try:
+        reader = pd.read_csv(
+            ratings_path,
+            low_memory=False,
+            chunksize=chunksize,
+        )
+    except pd.errors.EmptyDataError:
+        print(f"{ratings_path} has no readable columns; skipping ratings from this file.")
+        return 0
+
+    for chunk in reader:
+        chunk = normalize_rating_columns(chunk)
+
+        if "MovieID" not in chunk.columns:
+            raise ValueError(f"Column 'MovieID' not found in {ratings_path}")
+
+        chunk["MovieID"] = pd.to_numeric(chunk["MovieID"], errors="coerce")
+        chunk = chunk.dropna(subset=["MovieID"]).copy()
+        chunk["MovieID"] = chunk["MovieID"].astype(int)
+
+        chunk = chunk[chunk["MovieID"].isin(movie_ids)].copy()
+
+        if chunk.empty:
+            continue
+
+        chunk["InteractionType"] = "rating"
+        chunk["SourceDataset"] = source_name
+        chunk["Tag"] = pd.NA
+
+        preferred_cols = [
+            "UserID",
+            "MovieID",
+            "InteractionType",
+            "Rating",
+            "Tag",
+            "Timestamp",
+            "SourceDataset",
+        ]
+
+        output_cols = [col for col in preferred_cols if col in chunk.columns]
+        chunk = chunk[output_cols]
+
+        chunk.to_csv(
+            output_path,
+            mode="a",
+            index=False,
+            header=write_header,
+        )
+
+        write_header = False
+        total_written += len(chunk)
+
+    return total_written
+
+
+def append_filtered_tags_as_events(
+    tags_path,
+    movie_ids,
+    source_name,
+    output_path,
+    write_header,
+    chunksize=500_000,
+):
+    """
+    Append tags for selected MovieIDs to dataset_ratings_and_tags.csv.
+
+    Large MovieLens 32M tag files are processed in chunks to avoid loading the
+    full file into memory.
+    """
+    tags_path = Path(tags_path)
+    total_written = 0
+
+    if tags_path.stat().st_size == 0:
+        print(f"{tags_path} is empty; skipping tags from this file.")
+        return 0
+
+    try:
+        reader = pd.read_csv(
+            tags_path,
+            low_memory=False,
+            chunksize=chunksize,
+        )
+    except pd.errors.EmptyDataError:
+        print(f"{tags_path} has no readable columns; skipping tags from this file.")
+        return 0
+
+    for chunk in reader:
+        chunk = normalize_tag_columns(chunk)
+
+        if "MovieID" not in chunk.columns:
+            raise ValueError(f"Column 'MovieID' not found in {tags_path}")
+
+        chunk["MovieID"] = pd.to_numeric(chunk["MovieID"], errors="coerce")
+        chunk = chunk.dropna(subset=["MovieID"]).copy()
+        chunk["MovieID"] = chunk["MovieID"].astype(int)
+
+        chunk = chunk[chunk["MovieID"].isin(movie_ids)].copy()
+
+        if chunk.empty:
+            continue
+
+        chunk["InteractionType"] = "tag"
+        chunk["SourceDataset"] = source_name
+        chunk["Rating"] = pd.NA
+
+        preferred_cols = [
+            "UserID",
+            "MovieID",
+            "InteractionType",
+            "Rating",
+            "Tag",
+            "Timestamp",
+            "SourceDataset",
+        ]
+
+        output_cols = [col for col in preferred_cols if col in chunk.columns]
+        chunk = chunk[output_cols]
+
+        chunk.to_csv(
+            output_path,
+            mode="a",
+            index=False,
+            header=write_header,
+        )
+
+        write_header = False
+        total_written += len(chunk)
+
+    return total_written
+
+
+def normalize_rating_columns(ratings):
+    """
+    Normalize common MovieLens rating column names.
+    """
+    ratings = ratings.copy()
+
+    rename_map = {
+        "userId": "UserID",
+        "userid": "UserID",
+        "user_id": "UserID",
+        "movieId": "MovieID",
+        "movieid": "MovieID",
+        "movie_id": "MovieID",
+        "rating": "Rating",
+        "timestamp": "Timestamp",
+    }
+
+    ratings = ratings.rename(
+        columns={
+            col: rename_map.get(col, col)
+            for col in ratings.columns
+        }
+    )
+
+    return ratings
+
+
+def normalize_tag_columns(tags):
+    """
+    Normalize common MovieLens tag column names.
+    """
+    tags = tags.copy()
+
+    rename_map = {
+        "userId": "UserID",
+        "userid": "UserID",
+        "user_id": "UserID",
+        "movieId": "MovieID",
+        "movieid": "MovieID",
+        "movie_id": "MovieID",
+        "tag": "Tag",
+        "timestamp": "Timestamp",
+    }
+
+    tags = tags.rename(
+        columns={
+            col: rename_map.get(col, col)
+            for col in tags.columns
+        }
+    )
+
+    return tags
+
+
 def run_analysis(analysis_script=ANALYSIS_SCRIPT):
     """
     Run analyze_data.py after dataset.csv has been created or updated.
@@ -990,49 +1416,30 @@ def run_analysis(analysis_script=ANALYSIS_SCRIPT):
 
 def has_language_features(dataset):
     """
-    Check whether the main dataset already contains the current subtitle features.
-
-    Rows without subtitles are allowed to have missing language features. This is
-    expected because the main dataset now contains all 1M and 32M movies, while
-    subtitle files may exist only for a subset.
-
-    The version check is applied only to rows that actually have subtitle
-    features.
+    Return True if no available subtitle file needs preprocessing.
     """
-    return not get_movie_ids_requiring_subtitle_features(
-        dataset=dataset,
-        subs_dir=SUBS_DIR,
-    )
+    return len(get_movie_ids_needing_language_features(dataset)) == 0
 
 
-def get_movie_ids_requiring_subtitle_features(
-    dataset,
-    subs_dir=SUBS_DIR,
-):
+def get_movie_ids_needing_language_features(dataset):
     """
-    Return MovieIDs whose subtitle files should be preprocessed.
+    Return MovieIDs whose subtitle files should be processed.
 
-    Only movies that already have a downloaded .srt file are considered.
-    A MovieID is returned when:
-        - at least one language feature column is missing from dataset.csv;
-        - the movie row is missing one or more language feature values;
-        - the movie row has an old or missing language_feature_version.
+    A subtitle file is processed when:
+        - its MovieID exists in dataset.csv, and
+        - any language feature column is missing from dataset.csv, or
+        - any language feature value for that row is missing, or
+        - language_feature_version is not the current version.
 
-    This prevents rerunning OpenSubtitles preprocessing for every subtitle file
-    when only a subset of movies needs new or refreshed language features.
+    This means newly appended MovieLens rows with subtitle files are processed,
+    while already-complete existing rows are skipped.
     """
     if "MovieID" not in dataset.columns:
         raise ValueError("Column 'MovieID' not found in main dataset")
 
-    subs_dir = Path(subs_dir)
-
-    if not subs_dir.exists():
-        raise FileNotFoundError(f"{subs_dir} not found")
-
-    subtitle_movie_ids = get_movie_ids_with_subtitle_files(subs_dir)
+    subtitle_movie_ids = get_movie_ids_with_subtitle_files(SUBS_DIR)
 
     if not subtitle_movie_ids:
-        print("No subtitle files found.")
         return set()
 
     dataset = dataset.copy()
@@ -1040,40 +1447,34 @@ def get_movie_ids_requiring_subtitle_features(
     dataset = dataset.dropna(subset=["MovieID"]).copy()
     dataset["MovieID"] = dataset["MovieID"].astype(int)
 
-    dataset = dataset[dataset["MovieID"].isin(subtitle_movie_ids)].copy()
+    dataset_movie_ids = set(dataset["MovieID"])
+    candidate_movie_ids = subtitle_movie_ids & dataset_movie_ids
 
-    if dataset.empty:
-        print("No dataset rows match downloaded subtitle files.")
+    if not candidate_movie_ids:
         return set()
 
-    missing_language_features = LANGUAGE_FEATURE_COLUMNS - set(dataset.columns)
+    missing_columns = LANGUAGE_FEATURE_COLUMNS - set(dataset.columns)
 
-    if missing_language_features:
-        print(
-            "Language feature columns missing from dataset.csv; "
-            "only matching subtitle files will be preprocessed."
-        )
-        return set(dataset["MovieID"])
+    if missing_columns:
+        return candidate_movie_ids
 
-    feature_cols_to_check = list(LANGUAGE_FEATURE_COLUMNS)
+    subtitle_rows = dataset["MovieID"].isin(candidate_movie_ids)
 
-    missing_feature_values = dataset[feature_cols_to_check].isna().any(axis=1)
+    feature_cols = list(LANGUAGE_FEATURE_COLUMNS - {LANGUAGE_FEATURE_VERSION_COL})
+    feature_missing = dataset.loc[subtitle_rows, feature_cols].isna().any(axis=1)
 
     version_values = pd.to_numeric(
-        dataset[LANGUAGE_FEATURE_VERSION_COL],
+        dataset.loc[subtitle_rows, LANGUAGE_FEATURE_VERSION_COL],
         errors="coerce",
     )
-    old_feature_version = ~version_values.eq(LANGUAGE_FEATURE_VERSION)
+    old_version = ~version_values.eq(LANGUAGE_FEATURE_VERSION)
 
-    needs_features = missing_feature_values | old_feature_version
-    movie_ids = set(dataset.loc[needs_features, "MovieID"])
+    needs_processing_rows = dataset.loc[
+        subtitle_rows,
+        "MovieID",
+    ][feature_missing | old_version]
 
-    print(
-        "Subtitle feature preprocessing needed for "
-        f"{len(movie_ids):,} / {len(subtitle_movie_ids):,} subtitle files."
-    )
-
-    return movie_ids
+    return set(needs_processing_rows.astype(int))
 
 
 def get_movie_ids_with_subtitle_files(subs_dir=SUBS_DIR):
@@ -1084,6 +1485,10 @@ def get_movie_ids_with_subtitle_files(subs_dir=SUBS_DIR):
         1_toy_story_1995.srt
     """
     subs_dir = Path(subs_dir)
+
+    if not subs_dir.exists():
+        return set()
+
     movie_ids = set()
 
     for subtitle_path in subs_dir.glob("*.srt"):
@@ -1102,43 +1507,34 @@ def get_movie_ids_with_subtitle_files(subs_dir=SUBS_DIR):
 def preprocess_opensubtitles(
     dataset_path: str | Path = SUBS_DIR,
     limit: int | None = None,
-    movie_ids_to_process: set[int] | None = None,
+    movie_ids: set[int] | None = None,
 ) -> pd.DataFrame:
     """
     Preprocess downloaded OpenSubtitles .srt files.
 
+    If movie_ids is provided, only subtitle files whose filenames start with one
+    of those MovieIDs are processed.
+
     Returns one row per subtitle/movie file with numeric dialogue features only.
     Does not save full subtitle text.
-
-    Parameters
-    ----------
-    dataset_path : str or pathlib.Path
-        Directory containing downloaded .srt subtitle files.
-    limit : int or None
-        Optional maximum number of files to preprocess.
-    movie_ids_to_process : set[int] or None
-        Optional MovieID subset. If provided, only subtitle files whose filename
-        starts with one of these MovieIDs are preprocessed.
     """
     dataset_path = Path(dataset_path)
     files = list(dataset_path.rglob("*.srt"))
 
-    if movie_ids_to_process is not None:
-        movie_ids_to_process = {
+    if movie_ids is not None:
+        movie_ids = {
             int(movie_id)
-            for movie_id in movie_ids_to_process
+            for movie_id in movie_ids
+            if pd.notna(movie_id)
         }
-
         files = [
             file_path
             for file_path in files
-            if extract_movie_id_from_filename(file_path.name) in movie_ids_to_process
+            if extract_movie_id_from_filename(file_path.name) in movie_ids
         ]
 
     if limit is not None:
         files = files[:limit]
-
-    print(f"OpenSubtitles files to preprocess: {len(files):,}")
 
     rows = []
 
