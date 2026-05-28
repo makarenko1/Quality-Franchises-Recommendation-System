@@ -15,12 +15,22 @@ Outputs:
         franchise_installment_vs_imdb_rating.png
         franchise_installment_mean_rating.png
         franchise_rating_change_from_first.png
+        franchise_rating_distribution_by_installment.png
         dialogue_feature_correlations.png
         dialogue_feature_correlations_all.png
+        dialogue_feature_correlations_mean_user_rating.png
+        dialogue_feature_correlations_mean_user_rating_all.png
+        dialogue_feature_correlations_mean_user_rating_heatmap.png
+        content_stemmed_feature_correlations.png
+        content_stemmed_feature_correlations_all.png
         dialogue_feature_vs_imdb_rating_<feature>.png
         dialogue_feature_correlations_filtered.png
         dialogue_feature_redundancy_heatmap.png
+        rating_dialogue_control_correlations.png
+        rating_dialogue_control_heatmap.png
         rating_by_genre.png
+        imdb_rating_by_decade_genre_heatmap.png
+        vocabulary_diversity_imdb_correlation_by_decade_genre.png
         rating_by_year.png
         dialogue_feature_year_correlations.png
         dialogue_feature_by_year_<feature>.png
@@ -38,13 +48,54 @@ import pandas as pd
 
 
 DATASET_PATH = Path("dataset.csv")
+RATINGS_AND_TAGS_DATASET_PATH = Path("dataset_ratings_and_tags.csv")
 OUTPUT_DIR = Path("analysis_outputs")
 
-TITLE_FONT_SIZE = 22
-AXIS_LABEL_FONT_SIZE = 18
-TICK_FONT_SIZE = 14
-LEGEND_FONT_SIZE = 14
-ANNOTATION_FONT_SIZE = 12
+TITLE_FONT_SIZE = 40
+AXIS_LABEL_FONT_SIZE = 36
+TICK_FONT_SIZE = 32
+LEGEND_FONT_SIZE = 32
+ANNOTATION_FONT_SIZE = 30
+
+PRESENTATION_TITLE_FONT_SIZE = TITLE_FONT_SIZE + 2
+PRESENTATION_AXIS_LABEL_FONT_SIZE = AXIS_LABEL_FONT_SIZE + 2
+PRESENTATION_TICK_FONT_SIZE = TICK_FONT_SIZE + 1
+PRESENTATION_ANNOTATION_FONT_SIZE = ANNOTATION_FONT_SIZE + 1
+
+SCATTER_TITLE_FONT_SIZE = TITLE_FONT_SIZE + 2
+SCATTER_AXIS_LABEL_FONT_SIZE = AXIS_LABEL_FONT_SIZE + 2
+SCATTER_TICK_FONT_SIZE = TICK_FONT_SIZE + 1
+SCATTER_ANNOTATION_FONT_SIZE = ANNOTATION_FONT_SIZE + 1
+
+
+def add_text_shadow(
+    x,
+    y,
+    text,
+    *,
+    fontsize,
+    ha="center",
+    va="bottom",
+    shadow_offset=(0.035, -0.035),
+    shadow_alpha=0.35,
+    **kwargs,
+):
+    """
+    Add text without a duplicate/shadow copy.
+
+    The function name is kept for compatibility with older plotting code, but
+    the visual text-shadow effect is intentionally disabled.
+    """
+    plt.text(
+        x,
+        y,
+        text,
+        fontsize=fontsize,
+        ha=ha,
+        va=va,
+        **kwargs,
+    )
+
 
 RATING_COL = "imdb_averageRating"
 INSTALLMENT_COL = "FranchiseInstallment"
@@ -89,6 +140,16 @@ DIALOGUE_FEATURES = [
     "repeated_line_ratio",
     "duplicate_line_count",
     "most_common_line_frequency",
+
+    # Optional stopword-removed and stemmed content-word features
+    "content_stemmed_num_tokens",
+    "content_stemmed_num_unique_tokens",
+    "content_stemmed_type_token_ratio",
+    "content_stemmed_hapax_ratio",
+    "content_stemmed_top_word_frequency_ratio",
+    "content_stemmed_bigram_repetition_ratio",
+    "content_stemmed_trigram_repetition_ratio",
+    "content_stemmed_repeated_short_phrase_ratio",
 
     # Sentiment / emotion
     "average_sentiment",
@@ -138,6 +199,15 @@ DIALOGUE_FEATURE_LABELS = {
     "repeated_line_ratio": "Repeated subtitle line ratio",
     "duplicate_line_count": "Duplicate subtitle line count",
     "most_common_line_frequency": "Most common line frequency",
+
+    "content_stemmed_num_tokens": "Content stemmed words",
+    "content_stemmed_num_unique_tokens": "Unique content stemmed words",
+    "content_stemmed_type_token_ratio": "Content stemmed vocabulary diversity",
+    "content_stemmed_hapax_ratio": "Content stemmed one-time word ratio",
+    "content_stemmed_top_word_frequency_ratio": "Most frequent content stem share",
+    "content_stemmed_bigram_repetition_ratio": "Repeated content two-stem phrase ratio",
+    "content_stemmed_trigram_repetition_ratio": "Repeated content three-stem phrase ratio",
+    "content_stemmed_repeated_short_phrase_ratio": "Repeated content short phrase ratio",
 
     "average_sentiment": "Average sentiment score",
     "sentiment_variance": "Sentiment variance",
@@ -189,6 +259,14 @@ def main():
     summary_lines.append("")
     dialogue_summary = analyze_dialogue_rating_relationship(dataset)
     summary_lines.extend(dialogue_summary)
+
+    summary_lines.append("")
+    content_stemmed_summary = analyze_content_stemmed_feature_relationship(dataset)
+    summary_lines.extend(content_stemmed_summary)
+
+    summary_lines.append("")
+    user_rating_dialogue_summary = analyze_dialogue_mean_user_rating_relationship(dataset)
+    summary_lines.extend(user_rating_dialogue_summary)
 
     summary_lines.append("")
     diagnostics_summary = analyze_data_quality_and_controls(dataset)
@@ -323,6 +401,7 @@ def analyze_franchise_rating_relationship(dataset):
 
     plot_franchise_scatter(franchise_df, slope, intercept)
     plot_mean_rating_by_installment(franchise_df)
+    plot_rating_distribution_by_installment(franchise_df)
 
     rating_change_summary = analyze_rating_change_from_first(franchise_df)
     lines.extend(rating_change_summary)
@@ -398,8 +477,8 @@ def plot_rating_change_from_first(franchise_df):
         .sort_values(INSTALLMENT_COL)
     )
 
-    plt.figure(figsize=(9, 6))
-    plt.plot(grouped[INSTALLMENT_COL], grouped["mean"], marker="o")
+    plt.figure(figsize=(13, 9))
+    plt.plot(grouped[INSTALLMENT_COL], grouped["mean"], marker="o", linewidth=3, markersize=9)
     plt.axhline(0, linewidth=1)
 
     for _, row in grouped.iterrows():
@@ -407,7 +486,7 @@ def plot_rating_change_from_first(franchise_df):
             row[INSTALLMENT_COL],
             row["mean"],
             f"n={int(row['count'])}",
-            fontsize=ANNOTATION_FONT_SIZE,
+            fontsize=max(1, ANNOTATION_FONT_SIZE - 2),
             ha="center",
             va="bottom",
         )
@@ -435,23 +514,44 @@ def plot_franchise_scatter(franchise_df, slope, intercept):
     rng = np.random.default_rng(seed=42)
     x_jitter = x + rng.normal(0, 0.04, size=len(x))
 
-    plt.figure(figsize=(9, 6))
-    plt.scatter(x_jitter, y, alpha=0.35)
+    plt.figure(figsize=(16, 11))
+    plt.scatter(x_jitter, y, alpha=0.35, s=65)
 
     x_line = np.linspace(x.min(), x.max(), 100)
     y_line = slope * x_line + intercept
 
-    plt.plot(x_line, y_line, linewidth=2)
+    plt.plot(x_line, y_line, linewidth=3)
 
-    plt.title("IMDb Rating vs Franchise Installment Number", fontsize=TITLE_FONT_SIZE)
-    plt.xlabel("Franchise installment number", fontsize=AXIS_LABEL_FONT_SIZE)
-    plt.ylabel("IMDb rating", fontsize=AXIS_LABEL_FONT_SIZE)
-    plt.tick_params(axis="both", labelsize=TICK_FONT_SIZE)
+    plt.title(
+        "IMDb Rating vs Franchise Installment Number",
+        fontsize=SCATTER_TITLE_FONT_SIZE,
+        pad=22,
+    )
+    plt.xlabel(
+        "Franchise installment number",
+        fontsize=SCATTER_AXIS_LABEL_FONT_SIZE,
+    )
+    plt.ylabel(
+        "IMDb rating",
+        fontsize=SCATTER_AXIS_LABEL_FONT_SIZE,
+    )
+    plt.tick_params(axis="both", labelsize=SCATTER_TICK_FONT_SIZE)
+
+    slope_text = f"Trend: {slope:.2f} rating points per installment"
+    plt.text(
+        x.min(),
+        y.max(),
+        slope_text,
+        fontsize=SCATTER_ANNOTATION_FONT_SIZE,
+        ha="left",
+        va="top",
+    )
+
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
 
     output_path = OUTPUT_DIR / "franchise_installment_vs_imdb_rating.png"
-    plt.savefig(output_path, dpi=200)
+    plt.savefig(output_path, dpi=220)
     plt.close()
 
 
@@ -459,39 +559,137 @@ def plot_mean_rating_by_installment(franchise_df):
     """
     Plot average IMDb rating by installment number.
 
-    The n= labels show how many movies-1M are included in each
+    The shaded band shows the minimum-to-maximum IMDb rating range for each
+    installment number. The n= labels show how many movies are included in each
     installment-number average.
     """
     grouped = (
         franchise_df
         .groupby(INSTALLMENT_COL)[RATING_COL]
-        .agg(["mean", "count"])
+        .agg(["mean", "min", "max", "count"])
         .reset_index()
         .sort_values(INSTALLMENT_COL)
     )
 
-    plt.figure(figsize=(9, 6))
-    plt.plot(grouped[INSTALLMENT_COL], grouped["mean"], marker="o")
+    plt.figure(figsize=(15, 10))
+
+    # Min-max range shadow/band.
+    plt.fill_between(
+        grouped[INSTALLMENT_COL],
+        grouped["min"],
+        grouped["max"],
+        alpha=0.18,
+        label="Min-max rating range",
+    )
+
+    plt.plot(
+        grouped[INSTALLMENT_COL],
+        grouped["mean"],
+        marker="o",
+        linewidth=3,
+        markersize=9,
+        label="Mean IMDb rating",
+    )
 
     for _, row in grouped.iterrows():
         plt.text(
             row[INSTALLMENT_COL],
             row["mean"],
             f"n={int(row['count'])}",
-            fontsize=ANNOTATION_FONT_SIZE,
+            fontsize=max(1, PRESENTATION_ANNOTATION_FONT_SIZE - 2),
             ha="center",
             va="bottom",
         )
 
-    plt.title("Mean IMDb Rating by Franchise Installment", fontsize=TITLE_FONT_SIZE)
-    plt.xlabel("Franchise installment number", fontsize=AXIS_LABEL_FONT_SIZE)
-    plt.ylabel("Mean IMDb rating", fontsize=AXIS_LABEL_FONT_SIZE)
-    plt.tick_params(axis="both", labelsize=TICK_FONT_SIZE)
+    plt.title(
+        "Mean IMDb Rating by Franchise Installment",
+        fontsize=PRESENTATION_TITLE_FONT_SIZE + 5,
+        pad=20,
+    )
+    plt.xlabel(
+        "Franchise installment number",
+        fontsize=PRESENTATION_AXIS_LABEL_FONT_SIZE + 4,
+    )
+    plt.ylabel(
+        "Mean IMDb rating",
+        fontsize=PRESENTATION_AXIS_LABEL_FONT_SIZE + 4,
+    )
+    plt.tick_params(axis="both", labelsize=PRESENTATION_TICK_FONT_SIZE + 4)
+    plt.legend(fontsize=LEGEND_FONT_SIZE + 4)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
 
     output_path = OUTPUT_DIR / "franchise_installment_mean_rating.png"
     plt.savefig(output_path, dpi=200)
+    plt.close()
+
+
+def plot_rating_distribution_by_installment(franchise_df):
+    """
+    Plot the distribution of IMDb ratings by franchise installment number.
+
+    This complements the mean/trend plots by showing whether later installments
+    are consistently lower or whether the trend is driven by outliers.
+    """
+    df = franchise_df[[INSTALLMENT_COL, RATING_COL]].copy()
+    df[INSTALLMENT_COL] = pd.to_numeric(df[INSTALLMENT_COL], errors="coerce")
+    df[RATING_COL] = pd.to_numeric(df[RATING_COL], errors="coerce")
+    df = df.dropna()
+
+    if df.empty:
+        return
+
+    grouped = (
+        df
+        .groupby(INSTALLMENT_COL)[RATING_COL]
+        .apply(list)
+        .reset_index()
+        .sort_values(INSTALLMENT_COL)
+    )
+
+    # Limit the plot to installment positions with enough observations so that
+    # the distribution remains readable.
+    counts = df.groupby(INSTALLMENT_COL)[RATING_COL].count()
+    valid_installments = counts[counts >= 3].index
+    grouped = grouped[grouped[INSTALLMENT_COL].isin(valid_installments)].copy()
+
+    if grouped.empty:
+        return
+
+    values = grouped[RATING_COL].tolist()
+    labels = [str(int(x)) for x in grouped[INSTALLMENT_COL]]
+
+    plt.figure(figsize=(16, 11))
+    box = plt.boxplot(
+        values,
+        tick_labels=labels,
+        patch_artist=True,
+        showmeans=True,
+    )
+
+    for median in box["medians"]:
+        median.set_linewidth(2)
+
+    for i, installment in enumerate(grouped[INSTALLMENT_COL], start=1):
+        count = int(counts.loc[installment])
+        median_value = np.median(grouped.loc[grouped[INSTALLMENT_COL] == installment, RATING_COL].iloc[0])
+        plt.text(
+            i,
+            median_value,
+            f"n={count}",
+            fontsize=ANNOTATION_FONT_SIZE,
+            ha="center",
+            va="bottom",
+        )
+
+    plt.title("IMDb Rating Distribution by Franchise Installment", fontsize=TITLE_FONT_SIZE)
+    plt.xlabel("Franchise installment number", fontsize=AXIS_LABEL_FONT_SIZE)
+    plt.ylabel("IMDb rating", fontsize=AXIS_LABEL_FONT_SIZE)
+    plt.tick_params(axis="both", labelsize=TICK_FONT_SIZE)
+    plt.grid(True, axis="y", alpha=0.3)
+    plt.tight_layout()
+
+    plt.savefig(OUTPUT_DIR / "franchise_rating_distribution_by_installment.png", dpi=200)
     plt.close()
 
 
@@ -617,6 +815,354 @@ def analyze_dialogue_rating_relationship(dataset):
     return lines
 
 
+CONTENT_STEMMED_FEATURES = [
+    "content_stemmed_num_tokens",
+    "content_stemmed_num_unique_tokens",
+    "content_stemmed_type_token_ratio",
+    "content_stemmed_hapax_ratio",
+    "content_stemmed_top_word_frequency_ratio",
+    "content_stemmed_bigram_repetition_ratio",
+    "content_stemmed_trigram_repetition_ratio",
+    "content_stemmed_repeated_short_phrase_ratio",
+]
+
+
+def analyze_content_stemmed_feature_relationship(dataset):
+    """
+    Analyze only the optional stopword-removed and stemmed content-word features.
+
+    This creates separate plots so these robustness features can be compared
+    with the original dialogue features without replacing them.
+    """
+    lines = []
+    lines.append("Optional content-stemmed features vs IMDb rating")
+    lines.append("-" * 40)
+
+    available_features = [
+        feature for feature in CONTENT_STEMMED_FEATURES
+        if feature in dataset.columns
+    ]
+
+    if not available_features:
+        lines.append(
+            "Skipped: no content-stemmed feature columns were found. "
+            "Run main.py after adding the NLTK-based features first."
+        )
+        return lines
+
+    if RATING_COL not in dataset.columns:
+        lines.append(f"Skipped: {RATING_COL} is missing.")
+        return lines
+
+    corr_df = compute_feature_correlations_with_target(
+        dataset=dataset,
+        features=available_features,
+        target_col=RATING_COL,
+    )
+
+    if corr_df.empty:
+        lines.append("Skipped: no content-stemmed feature had enough valid rows.")
+        return lines
+
+    lines.append("Correlations with IMDb rating:")
+    for _, row in corr_df.sort_values("abs_pearson", ascending=False).iterrows():
+        lines.append(
+            f"  {get_feature_label(row['feature'])}: "
+            f"Pearson={row['pearson']:.4f}, "
+            f"Spearman={row['spearman']:.4f}, "
+            f"n={int(row['n'])}"
+        )
+
+    top_corr_df = corr_df.sort_values("abs_pearson", ascending=False).head(10)
+    plot_correlation_bar(
+        top_corr_df,
+        title="Top Content-Stemmed Feature Correlations with IMDb Rating",
+        output_path=OUTPUT_DIR / "content_stemmed_feature_correlations.png",
+    )
+
+    all_corr_df = corr_df.sort_values("pearson")
+    plot_correlation_bar(
+        all_corr_df,
+        title="All Content-Stemmed Feature Correlations with IMDb Rating",
+        output_path=OUTPUT_DIR / "content_stemmed_feature_correlations_all.png",
+        height=max(8, 0.7 * len(all_corr_df)),
+    )
+
+    lines.append(
+        "Saved content-stemmed feature correlation plots to "
+        "content_stemmed_feature_correlations.png and "
+        "content_stemmed_feature_correlations_all.png."
+    )
+
+    return lines
+
+
+def load_mean_user_ratings(
+    ratings_path=RATINGS_AND_TAGS_DATASET_PATH,
+):
+    """
+    Load dataset_ratings_and_tags.csv and compute mean user rating per movie.
+
+    The ratings/tags dataset contains both rating and tag events. Rating rows are
+    identified by a non-empty numeric Rating value.
+    """
+    ratings_path = Path(ratings_path)
+
+    if not ratings_path.exists():
+        return None, f"Skipped: {ratings_path} not found."
+
+    required_cols = {"MovieID", "Rating"}
+    chunks = []
+
+    try:
+        reader = pd.read_csv(
+            ratings_path,
+            usecols=["MovieID", "Rating"],
+            low_memory=False,
+            chunksize=500_000,
+        )
+
+        for chunk in reader:
+            chunk["MovieID"] = pd.to_numeric(chunk["MovieID"], errors="coerce")
+            chunk["Rating"] = pd.to_numeric(chunk["Rating"], errors="coerce")
+            chunk = chunk.dropna(subset=["MovieID", "Rating"])
+
+            if chunk.empty:
+                continue
+
+            chunk["MovieID"] = chunk["MovieID"].astype(int)
+            chunks.append(chunk)
+
+    except ValueError:
+        return None, (
+            f"Skipped: {ratings_path} must contain columns {required_cols}."
+        )
+    except pd.errors.EmptyDataError:
+        return None, f"Skipped: {ratings_path} is empty."
+
+    if not chunks:
+        return None, f"Skipped: no rating rows found in {ratings_path}."
+
+    ratings = pd.concat(chunks, ignore_index=True)
+
+    mean_ratings = (
+        ratings
+        .groupby("MovieID")["Rating"]
+        .agg(["mean", "count"])
+        .reset_index()
+        .rename(
+            columns={
+                "mean": "mean_user_rating",
+                "count": "user_rating_count",
+            }
+        )
+    )
+
+    return mean_ratings, None
+
+
+def analyze_dialogue_mean_user_rating_relationship(dataset):
+    """
+    Analyze relationships between dialogue features and mean user ratings.
+
+    Mean user rating is computed from dataset_ratings_and_tags.csv using the
+    Rating column grouped by MovieID. The computed values are used only inside
+    this function for the correlation plots; dataset.csv is not modified.
+    """
+    lines = []
+    lines.append("Dialogue features vs mean user rating")
+    lines.append("-" * 40)
+
+    if "MovieID" not in dataset.columns:
+        lines.append("Skipped: MovieID column is missing from dataset.csv.")
+        return lines
+
+    mean_ratings, error_message = load_mean_user_ratings()
+
+    if error_message is not None:
+        lines.append(error_message)
+        return lines
+
+    available_features = [
+        feature for feature in DIALOGUE_FEATURES
+        if feature in dataset.columns
+    ]
+
+    if not available_features:
+        lines.append("Skipped: no dialogue feature columns were found.")
+        return lines
+
+    mean_rating_map = mean_ratings.set_index("MovieID")["mean_user_rating"]
+
+    df = dataset[["MovieID"] + available_features].copy()
+    df["MovieID"] = pd.to_numeric(df["MovieID"], errors="coerce")
+    df = df.dropna(subset=["MovieID"])
+    df["MovieID"] = df["MovieID"].astype(int)
+    df["mean_user_rating"] = df["MovieID"].map(mean_rating_map)
+    df = df.dropna(subset=["mean_user_rating"])
+
+    if df.empty:
+        lines.append(
+            "Skipped: no movies in dataset.csv matched rating rows in "
+            f"{RATINGS_AND_TAGS_DATASET_PATH}."
+        )
+        return lines
+
+    corr_df = compute_feature_correlations_with_target(
+        dataset=df,
+        features=available_features,
+        target_col="mean_user_rating",
+    )
+
+    if corr_df.empty:
+        lines.append(
+            "Skipped: no dialogue features had enough valid rows for "
+            "mean-user-rating correlation analysis."
+        )
+        return lines
+
+    lines.append(
+        "Mean user rating computed from "
+        f"{RATINGS_AND_TAGS_DATASET_PATH} using Rating grouped by MovieID."
+    )
+    lines.append(f"Movies with mean user ratings used in this computation: {len(df):,}")
+    lines.append("Correlations with mean user rating:")
+
+    for _, row in corr_df.sort_values("abs_pearson", ascending=False).iterrows():
+        lines.append(
+            f"  {get_feature_label(row['feature'])}: "
+            f"Pearson={row['pearson']:.4f}, "
+            f"Spearman={row['spearman']:.4f}, "
+            f"n={int(row['n'])}"
+        )
+
+    strongest = corr_df.sort_values("abs_pearson", ascending=False).iloc[0]
+
+    lines.append("")
+    lines.append(
+        f"Strongest absolute Pearson relationship with mean user rating: "
+        f"{get_feature_label(strongest['feature'])} "
+        f"({strongest['pearson']:.4f})."
+    )
+
+    top_corr_df = corr_df.sort_values("abs_pearson", ascending=False).head(10)
+    plot_correlation_bar(
+        top_corr_df,
+        title="Top Dialogue Feature Correlations with Mean User Rating",
+        output_path=OUTPUT_DIR / "dialogue_feature_correlations_mean_user_rating.png",
+        x_label="Correlation with mean user rating",
+    )
+
+    all_corr_df = corr_df.sort_values("pearson")
+    plot_correlation_bar(
+        all_corr_df,
+        title="All Dialogue Feature Correlations with Mean User Rating",
+        output_path=OUTPUT_DIR / "dialogue_feature_correlations_mean_user_rating_all.png",
+        height=max(8, 0.45 * len(all_corr_df)),
+        x_label="Correlation with mean user rating",
+    )
+
+    plot_dialogue_mean_user_rating_correlation_heatmap(corr_df)
+
+    lines.append(
+        "Saved dialogue-feature heatmap with mean user rating to "
+        "dialogue_feature_correlations_mean_user_rating_heatmap.png."
+    )
+
+    return lines
+
+
+def compute_feature_correlations_with_target(dataset, features, target_col):
+    """
+    Compute Pearson and Spearman correlations for features against a target.
+    """
+    df = dataset[[target_col] + features].copy()
+    df[target_col] = pd.to_numeric(df[target_col], errors="coerce")
+
+    correlations = []
+
+    for feature in features:
+        df[feature] = pd.to_numeric(df[feature], errors="coerce")
+        feature_df = df[[feature, target_col]].dropna()
+
+        if len(feature_df) < 2:
+            continue
+
+        correlations.append({
+            "feature": feature,
+            "pearson": feature_df[feature].corr(feature_df[target_col], method="pearson"),
+            "spearman": feature_df[feature].corr(feature_df[target_col], method="spearman"),
+            "n": len(feature_df),
+        })
+
+    corr_df = pd.DataFrame(correlations)
+
+    if not corr_df.empty:
+        corr_df["abs_pearson"] = corr_df["pearson"].abs()
+
+    return corr_df
+
+
+def plot_dialogue_mean_user_rating_correlation_heatmap(corr_df):
+    """
+    Plot dialogue-feature correlations with mean user rating as a compact heatmap.
+
+    This is a one-column heatmap, so it focuses only on the target variable
+    instead of showing a full pairwise correlation matrix.
+    """
+    corr_df = corr_df.copy().sort_values("pearson")
+
+    labels = [
+        get_feature_label(feature)
+        for feature in corr_df["feature"]
+    ]
+
+    values = corr_df["pearson"].to_numpy().reshape(-1, 1)
+
+    fig, ax = plt.subplots(figsize=(13, max(14, 0.72 * len(corr_df))))
+    image = ax.imshow(values, aspect="auto", vmin=-0.25, vmax=0.25)
+
+    cbar = fig.colorbar(image, ax=ax)
+    cbar.set_label(
+        "Pearson correlation with mean user rating",
+        fontsize=PRESENTATION_AXIS_LABEL_FONT_SIZE,
+    )
+    cbar.ax.tick_params(labelsize=PRESENTATION_TICK_FONT_SIZE)
+
+    y = np.arange(len(labels))
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels, fontsize=max(9, PRESENTATION_TICK_FONT_SIZE - 5))
+    ax.set_xticks([0])
+    ax.set_xticklabels(["Mean user rating"], fontsize=PRESENTATION_TICK_FONT_SIZE)
+
+    for i, value in enumerate(corr_df["pearson"]):
+        text_color = "white" if abs(value) >= 0.12 else "black"
+        ax.text(
+            0,
+            i,
+            f"{value:.2f}",
+            ha="center",
+            va="center",
+            fontsize=max(1, PRESENTATION_ANNOTATION_FONT_SIZE - 4),
+            color=text_color,
+        )
+
+    ax.set_title(
+        "Dialogue Feature Correlations\nwith Mean User Rating",
+        fontsize=PRESENTATION_TITLE_FONT_SIZE,
+        pad=34,
+    )
+    ax.set_ylabel("Dialogue feature", fontsize=PRESENTATION_AXIS_LABEL_FONT_SIZE)
+
+    fig.subplots_adjust(left=0.56, right=0.86, top=0.88, bottom=0.08)
+
+    plt.savefig(
+        OUTPUT_DIR / "dialogue_feature_correlations_mean_user_rating_heatmap.png",
+        dpi=260,
+    )
+    plt.close()
+
+
 def get_feature_label(feature):
     """
     Return a readable plot label for a dialogue feature column.
@@ -635,8 +1181,8 @@ def plot_dialogue_feature_scatter(feature_df, feature):
     y = feature_df[RATING_COL]
     feature_label = get_feature_label(feature)
 
-    plt.figure(figsize=(9, 6))
-    plt.scatter(x, y, alpha=0.35)
+    plt.figure(figsize=(16, 11))
+    plt.scatter(x, y, alpha=0.35, s=55)
 
     if x.nunique() > 1:
         slope, intercept = np.polyfit(x, y, deg=1)
@@ -687,6 +1233,7 @@ def plot_correlation_bar(
     title,
     output_path,
     height=6,
+    x_label="Correlation with IMDb rating",
 ):
     """
     Plot horizontal Pearson and Spearman correlation bars.
@@ -701,7 +1248,7 @@ def plot_correlation_bar(
         for feature in corr_df["feature"]
     ]
 
-    plt.figure(figsize=(12, height))
+    plt.figure(figsize=(18, max(height, 12)))
     plt.barh(y - height_bar / 2, corr_df["pearson"], height_bar, label="Pearson")
     plt.barh(y + height_bar / 2, corr_df["spearman"], height_bar, label="Spearman")
 
@@ -709,7 +1256,7 @@ def plot_correlation_bar(
     plt.yticks(y, feature_labels, fontsize=max(9, TICK_FONT_SIZE - 3))
     plt.xticks(fontsize=TICK_FONT_SIZE)
     plt.title(title, fontsize=TITLE_FONT_SIZE)
-    plt.xlabel("Correlation with IMDb rating", fontsize=AXIS_LABEL_FONT_SIZE)
+    plt.xlabel(x_label, fontsize=AXIS_LABEL_FONT_SIZE)
     plt.ylabel("Dialogue feature", fontsize=AXIS_LABEL_FONT_SIZE)
     plt.legend(fontsize=LEGEND_FONT_SIZE)
     plt.grid(True, axis="x", alpha=0.3)
@@ -759,6 +1306,12 @@ def analyze_data_quality_and_controls(dataset):
     lines.extend(analyze_genre_patterns(dataset))
     lines.append("")
 
+    lines.extend(analyze_rating_by_decade_and_genre(dataset))
+    lines.append("")
+
+    lines.extend(analyze_vocabulary_diversity_correlation_by_decade_and_genre(dataset))
+    lines.append("")
+
     lines.extend(analyze_first_vs_last_franchise(dataset))
     lines.append("")
 
@@ -766,6 +1319,9 @@ def analyze_data_quality_and_controls(dataset):
     lines.append("")
 
     lines.extend(analyze_feature_redundancy(dataset))
+    lines.append("")
+
+    lines.extend(analyze_rating_dialogue_control_heatmap(dataset))
     lines.append("")
 
     lines.extend(run_simple_regression_checks(dataset))
@@ -1211,8 +1767,8 @@ def plot_rating_by_year(yearly):
     """
     Plot mean IMDb rating by release year.
     """
-    plt.figure(figsize=(11, 6))
-    plt.plot(yearly["Year"], yearly["mean_rating"], marker="o", linewidth=1.5)
+    plt.figure(figsize=(17, 11))
+    plt.plot(yearly["Year"], yearly["mean_rating"], marker="o", linewidth=2.5, markersize=8)
 
     if yearly["Year"].nunique() > 1:
         slope, intercept = np.polyfit(yearly["Year"], yearly["mean_rating"], deg=1)
@@ -1242,8 +1798,8 @@ def plot_dialogue_feature_by_year(yearly, feature, mean_feature_col):
     if plot_df.empty:
         return
 
-    plt.figure(figsize=(11, 6))
-    plt.plot(plot_df["Year"], plot_df[mean_feature_col], marker="o", linewidth=1.5)
+    plt.figure(figsize=(17, 11))
+    plt.plot(plot_df["Year"], plot_df[mean_feature_col], marker="o", linewidth=2.5, markersize=8)
 
     if plot_df["Year"].nunique() > 1:
         slope, intercept = np.polyfit(plot_df["Year"], plot_df[mean_feature_col], deg=1)
@@ -1277,7 +1833,7 @@ def plot_year_feature_correlation_bar(corr_df):
         for feature in corr_df["feature"]
     ]
 
-    plt.figure(figsize=(12, max(6, 0.45 * len(corr_df))))
+    plt.figure(figsize=(18, max(12, 0.95 * len(corr_df))))
     plt.barh(y - height_bar / 2, corr_df["pearson"], height_bar, label="Pearson")
     plt.barh(y + height_bar / 2, corr_df["spearman"], height_bar, label="Spearman")
 
@@ -1338,6 +1894,9 @@ def analyze_genre_patterns(dataset):
 
     interesting_features = [
         "repeated_line_ratio",
+        "content_stemmed_type_token_ratio",
+        "content_stemmed_repeated_short_phrase_ratio",
+        "content_stemmed_top_word_frequency_ratio",
         "avg_line_length",
         "median_line_length",
         "long_word_ratio",
@@ -1377,7 +1936,7 @@ def plot_rating_by_genre(grouped):
     """
     plot_df = grouped.sort_values("mean", ascending=True)
 
-    plt.figure(figsize=(10, max(6, 0.35 * len(plot_df))))
+    plt.figure(figsize=(18, max(12, 0.8 * len(plot_df))))
     y = np.arange(len(plot_df))
     plt.barh(y, plot_df["mean"])
 
@@ -1395,6 +1954,325 @@ def plot_rating_by_genre(grouped):
     plt.tight_layout()
 
     plt.savefig(OUTPUT_DIR / "rating_by_genre.png", dpi=200)
+    plt.close()
+
+
+def analyze_rating_by_decade_and_genre(dataset):
+    """
+    Analyze IMDb ratings by release decade and primary genre.
+
+    This helps check whether rating patterns differ across both time period and
+    genre, instead of looking only at one variable at a time.
+    """
+    lines = []
+    lines.append("IMDb rating by decade and genre:")
+
+    required_cols = {"Year", RATING_COL}
+    missing_cols = required_cols - set(dataset.columns)
+
+    if missing_cols:
+        lines.append(f"Skipped: missing columns {missing_cols}.")
+        return lines
+
+    genre = get_primary_genre_series(dataset)
+
+    if genre.isna().all():
+        lines.append("Skipped: no genre columns found.")
+        return lines
+
+    df = dataset[["Year", RATING_COL]].copy()
+    df["PrimaryGenre"] = genre
+    df["Year"] = pd.to_numeric(df["Year"], errors="coerce")
+    df[RATING_COL] = pd.to_numeric(df[RATING_COL], errors="coerce")
+    df = df.dropna(subset=["Year", RATING_COL, "PrimaryGenre"])
+
+    if df.empty:
+        lines.append("Skipped: no valid rows with year, genre, and IMDb rating.")
+        return lines
+
+    df["Decade"] = (df["Year"].astype(int) // 10) * 10
+    df["DecadeLabel"] = df["Decade"].astype(int).astype(str) + "s"
+
+    # Keep only reasonably populated decade/genre cells, so the heatmap is not
+    # dominated by very small groups.
+    grouped = (
+        df
+        .groupby(["PrimaryGenre", "DecadeLabel"], observed=True)[RATING_COL]
+        .agg(["mean", "count"])
+        .reset_index()
+    )
+
+    min_cell_count = 10
+    grouped = grouped[grouped["count"] >= min_cell_count].copy()
+
+    if grouped.empty:
+        lines.append(
+            "Skipped: no decade/genre group had enough movies "
+            f"(minimum {min_cell_count})."
+        )
+        return lines
+
+    plot_rating_by_decade_genre_heatmap(grouped)
+
+    lines.append(
+        "Saved IMDb rating by decade and genre heatmap to "
+        "imdb_rating_by_decade_genre_heatmap.png."
+    )
+
+    return lines
+
+
+def plot_rating_by_decade_genre_heatmap(grouped):
+    """
+    Plot mean IMDb rating by primary genre and release decade as a heatmap.
+    """
+    heatmap_df = grouped.pivot(
+        index="PrimaryGenre",
+        columns="DecadeLabel",
+        values="mean",
+    )
+
+    # Sort genres by their overall mean rating and decades chronologically.
+    genre_order = (
+        grouped
+        .groupby("PrimaryGenre")["mean"]
+        .mean()
+        .sort_values(ascending=True)
+        .index
+    )
+
+    decade_order = sorted(
+        heatmap_df.columns,
+        key=lambda value: int(str(value).replace("s", "")),
+    )
+
+    heatmap_df = heatmap_df.reindex(index=genre_order, columns=decade_order)
+
+    # Keep the canvas wide, but crop the right side and give more room to the
+    # left side for long genre labels.
+    fig_width = max(17, 1.35 * len(heatmap_df.columns))
+    fig_height = max(10, 0.65 * len(heatmap_df.index))
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    image = ax.imshow(heatmap_df.values, aspect="auto", vmin=4.5, vmax=7.5)
+
+    cbar = fig.colorbar(image, ax=ax)
+    cbar.set_label("Mean IMDb rating", fontsize=AXIS_LABEL_FONT_SIZE)
+    cbar.ax.tick_params(labelsize=TICK_FONT_SIZE)
+
+    x = np.arange(len(heatmap_df.columns))
+    y = np.arange(len(heatmap_df.index))
+
+    ax.set_xticks(x)
+    ax.set_yticks(y)
+    ax.set_xticklabels(heatmap_df.columns, rotation=45, ha="right", fontsize=TICK_FONT_SIZE)
+    ax.set_yticklabels(heatmap_df.index, fontsize=TICK_FONT_SIZE)
+
+    for i in range(len(heatmap_df.index)):
+        for j in range(len(heatmap_df.columns)):
+            value = heatmap_df.iloc[i, j]
+
+            if pd.isna(value):
+                continue
+
+            text_color = "white" if value < 5.8 else "black"
+            ax.text(
+                j,
+                i,
+                f"{value:.1f}",
+                ha="center",
+                va="center",
+                fontsize=max(1, ANNOTATION_FONT_SIZE - 6),
+                color=text_color,
+            )
+
+    ax.set_title(
+        "Mean IMDb Rating by Decade and Genre",
+        fontsize=TITLE_FONT_SIZE,
+        pad=24,
+    )
+    ax.set_xlabel("Release decade", fontsize=AXIS_LABEL_FONT_SIZE)
+    ax.set_ylabel("Primary genre", fontsize=AXIS_LABEL_FONT_SIZE)
+
+    # More left margin for the y-axis label and genre names; less right margin
+    # so the figure is cropped more tightly after the colorbar.
+    fig.subplots_adjust(left=0.26, right=0.89, top=0.90, bottom=0.18)
+
+    plt.savefig(OUTPUT_DIR / "imdb_rating_by_decade_genre_heatmap.png", dpi=220)
+    plt.close()
+
+
+def analyze_vocabulary_diversity_correlation_by_decade_and_genre(dataset):
+    """
+    Analyze the correlation between vocabulary diversity ratio and IMDb rating
+    separately by release decade and primary genre.
+    """
+    lines = []
+    lines.append("Vocabulary diversity vs IMDb rating by decade and genre:")
+
+    feature_col = "type_token_ratio"
+    required_cols = {"Year", RATING_COL, feature_col}
+    missing_cols = required_cols - set(dataset.columns)
+
+    if missing_cols:
+        lines.append(f"Skipped: missing columns {missing_cols}.")
+        return lines
+
+    genre = get_primary_genre_series(dataset)
+
+    if genre.isna().all():
+        lines.append("Skipped: no genre columns found.")
+        return lines
+
+    df = dataset[["Year", RATING_COL, feature_col]].copy()
+    df["PrimaryGenre"] = genre
+    df["Year"] = pd.to_numeric(df["Year"], errors="coerce")
+    df[RATING_COL] = pd.to_numeric(df[RATING_COL], errors="coerce")
+    df[feature_col] = pd.to_numeric(df[feature_col], errors="coerce")
+    df = df.dropna(subset=["Year", RATING_COL, feature_col, "PrimaryGenre"])
+
+    if df.empty:
+        lines.append(
+            "Skipped: no valid rows with year, genre, IMDb rating, and "
+            "vocabulary diversity ratio."
+        )
+        return lines
+
+    df["Decade"] = (df["Year"].astype(int) // 10) * 10
+    df["DecadeLabel"] = df["Decade"].astype(int).astype(str) + "s"
+
+    min_cell_count = 30
+    rows = []
+
+    for (genre_name, decade_label), group in df.groupby(
+        ["PrimaryGenre", "DecadeLabel"],
+        observed=True,
+    ):
+        if len(group) < min_cell_count:
+            continue
+
+        if group[feature_col].nunique() <= 1 or group[RATING_COL].nunique() <= 1:
+            continue
+
+        correlation = group[feature_col].corr(group[RATING_COL], method="pearson")
+
+        if pd.isna(correlation):
+            continue
+
+        rows.append({
+            "PrimaryGenre": genre_name,
+            "DecadeLabel": decade_label,
+            "correlation": correlation,
+            "count": len(group),
+        })
+
+    corr_df = pd.DataFrame(rows)
+
+    if corr_df.empty:
+        lines.append(
+            "Skipped: no decade/genre group had enough valid movies "
+            f"(minimum {min_cell_count})."
+        )
+        return lines
+
+    plot_vocabulary_diversity_correlation_by_decade_genre_heatmap(corr_df)
+
+    lines.append(
+        "Saved vocabulary diversity vs IMDb rating correlation heatmap to "
+        "vocabulary_diversity_imdb_correlation_by_decade_genre.png."
+    )
+
+    return lines
+
+
+def plot_vocabulary_diversity_correlation_by_decade_genre_heatmap(corr_df):
+    """
+    Plot Pearson correlation between vocabulary diversity ratio and IMDb rating
+    by primary genre and release decade.
+    """
+    heatmap_df = corr_df.pivot(
+        index="PrimaryGenre",
+        columns="DecadeLabel",
+        values="correlation",
+    )
+
+    # Sort genres by their overall average correlation and decades
+    # chronologically, so the visual order is meaningful and stable.
+    genre_order = (
+        corr_df
+        .groupby("PrimaryGenre")["correlation"]
+        .mean()
+        .sort_values(ascending=True)
+        .index
+    )
+
+    decade_order = sorted(
+        heatmap_df.columns,
+        key=lambda value: int(str(value).replace("s", "")),
+    )
+
+    heatmap_df = heatmap_df.reindex(index=genre_order, columns=decade_order)
+
+    # Slightly larger in both directions than before.
+    fig_width = max(19, 1.55 * len(heatmap_df.columns))
+    fig_height = max(12, 0.82 * len(heatmap_df.index))
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    image = ax.imshow(heatmap_df.values, aspect="auto", vmin=-0.5, vmax=0.5)
+
+    cbar = fig.colorbar(image, ax=ax)
+    cbar.set_label(
+        "Pearson correlation with IMDb rating",
+        fontsize=AXIS_LABEL_FONT_SIZE,
+    )
+    cbar.ax.tick_params(labelsize=TICK_FONT_SIZE)
+
+    x = np.arange(len(heatmap_df.columns))
+    y = np.arange(len(heatmap_df.index))
+
+    ax.set_xticks(x)
+    ax.set_yticks(y)
+    ax.set_xticklabels(
+        heatmap_df.columns,
+        rotation=45,
+        ha="right",
+        fontsize=TICK_FONT_SIZE,
+    )
+    ax.set_yticklabels(heatmap_df.index, fontsize=TICK_FONT_SIZE)
+
+    for i in range(len(heatmap_df.index)):
+        for j in range(len(heatmap_df.columns)):
+            value = heatmap_df.iloc[i, j]
+
+            if pd.isna(value):
+                continue
+
+            text_color = "white" if abs(value) >= 0.25 else "black"
+            ax.text(
+                j,
+                i,
+                f"{value:.2f}",
+                ha="center",
+                va="center",
+                fontsize=max(1, ANNOTATION_FONT_SIZE - 8),
+                color=text_color,
+            )
+
+    ax.set_title(
+        "Vocabulary Diversity Ratio and IMDb Rating Correlation\nby Decade and Genre",
+        fontsize=TITLE_FONT_SIZE - 4,
+        pad=26,
+    )
+    ax.set_xlabel("Release decade", fontsize=AXIS_LABEL_FONT_SIZE)
+    ax.set_ylabel("Primary genre", fontsize=AXIS_LABEL_FONT_SIZE)
+
+    # Larger canvas with balanced room on all sides.
+    fig.subplots_adjust(left=0.24, right=0.90, top=0.88, bottom=0.20)
+
+    plt.savefig(
+        OUTPUT_DIR / "vocabulary_diversity_imdb_correlation_by_decade_genre.png",
+        dpi=220,
+    )
     plt.close()
 
 
@@ -1569,7 +2447,7 @@ def plot_feature_redundancy_heatmap(corr):
         for feature in corr.columns
     ]
 
-    plt.figure(figsize=(12, 10))
+    plt.figure(figsize=(16, 13))
     plt.imshow(corr.values, aspect="auto", vmin=-1, vmax=1)
     plt.colorbar(label="Pearson correlation")
 
@@ -1644,6 +2522,245 @@ def normalize_title_for_comparison(title):
     title = re.sub(r"[^a-z0-9\s]", " ", title)
     title = re.sub(r"\s+", " ", title)
     return title.strip()
+
+
+def analyze_rating_dialogue_control_heatmap(dataset):
+    """
+    Create a simple correlation plot for IMDb rating against selected metadata
+    and dialogue features.
+
+    This replaces the busy full correlation heatmap with a clearer visualization:
+    one horizontal bar per variable, showing only its correlation with IMDb rating.
+    """
+    lines = []
+    lines.append("Rating, metadata, and dialogue-feature correlation plot:")
+
+    selected_cols = [
+        RATING_COL,
+        "Year",
+        RUNTIME_COL,
+        "repeated_line_ratio",
+        "avg_line_length",
+        "median_line_length",
+        "long_word_ratio",
+        "complex_word_ratio",
+        "negative_word_ratio",
+        "anger_word_ratio",
+        "subtitle_words_per_minute",
+        "num_lines_per_minute",
+        "type_token_ratio",
+        "flesch_reading_ease",
+        "average_sentence_length",
+    ]
+
+    selected_cols = [
+        col for col in selected_cols
+        if col in dataset.columns
+    ]
+
+    if RATING_COL not in selected_cols or len(selected_cols) < 3:
+        lines.append("Skipped: IMDb rating or selected numeric columns are unavailable.")
+        return lines
+
+    df = dataset[selected_cols].copy()
+
+    for col in selected_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    rows = []
+
+    for col in selected_cols:
+        if col == RATING_COL:
+            continue
+
+        pair_df = df[[RATING_COL, col]].dropna()
+
+        if len(pair_df) < 30 or pair_df[col].nunique() <= 1:
+            continue
+
+        rows.append(
+            {
+                "feature": col,
+                "correlation": pair_df[col].corr(pair_df[RATING_COL], method="pearson"),
+                "n": len(pair_df),
+            }
+        )
+
+    corr_df = pd.DataFrame(rows)
+
+    if corr_df.empty:
+        lines.append("Skipped: no selected column had enough valid values.")
+        return lines
+
+    corr_df["abs_correlation"] = corr_df["correlation"].abs()
+    corr_df = corr_df.sort_values("correlation")
+
+    plot_rating_dialogue_control_correlation_bars(corr_df)
+    plot_rating_dialogue_control_correlation_heatmap(corr_df)
+
+    strongest = corr_df.sort_values("abs_correlation", ascending=False).iloc[0]
+    strongest_label = (
+        get_feature_label(strongest["feature"])
+        if strongest["feature"] in DIALOGUE_FEATURE_LABELS
+        else {
+            "Year": "Release year",
+            RUNTIME_COL: "Runtime in minutes",
+        }.get(strongest["feature"], str(strongest["feature"]).replace("_", " ").title())
+    )
+
+    lines.append(
+        "Strongest absolute correlation with IMDb rating in this plot: "
+        f"{strongest_label} ({strongest['correlation']:.4f}, n={int(strongest['n']):,})."
+    )
+    lines.append(
+        "Saved rating/metadata/dialogue correlation plot to "
+        "rating_dialogue_control_correlations.png."
+    )
+    lines.append(
+        "Saved rating/metadata/dialogue heatmap to "
+        "rating_dialogue_control_heatmap.png."
+    )
+
+    return lines
+
+
+def plot_rating_dialogue_control_correlation_bars(corr_df):
+    """
+    Plot selected metadata and dialogue features by correlation with IMDb rating.
+
+    This is a simpler alternative to a full heatmap because it focuses only on
+    the relationship with the outcome variable.
+    """
+    corr_df = corr_df.copy().sort_values("correlation")
+
+    labels = [
+        get_feature_label(feature) if feature in DIALOGUE_FEATURE_LABELS else {
+            "Year": "Release year",
+            RUNTIME_COL: "Runtime in minutes",
+        }.get(feature, str(feature).replace("_", " ").title())
+        for feature in corr_df["feature"]
+    ]
+
+    y = np.arange(len(corr_df))
+
+    # Slim canvas, but still tall enough for readable labels.
+    fig, ax = plt.subplots(figsize=(17, max(13, 1.05 * len(corr_df))))
+    bars = ax.barh(y, corr_df["correlation"], height=0.78)
+    ax.axvline(0, linewidth=2.4)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels, fontsize=PRESENTATION_TICK_FONT_SIZE)
+    ax.tick_params(axis="x", labelsize=PRESENTATION_TICK_FONT_SIZE)
+
+    max_abs = max(0.01, corr_df["correlation"].abs().max())
+
+    # Extra space is needed because all value labels are now outside the bars.
+    ax.set_xlim(-max_abs * 1.55, max_abs * 1.55)
+
+    value_label_font_size = max(1, PRESENTATION_ANNOTATION_FONT_SIZE - 1)
+    label_offset = max_abs * 0.055
+
+    for bar, value in zip(bars, corr_df["correlation"]):
+        y_pos = bar.get_y() + bar.get_height() / 2
+
+        # Place every label outside its bar: right of positive bars,
+        # left of negative bars.
+        if value >= 0:
+            x_pos = value + label_offset
+            ha = "left"
+        else:
+            x_pos = value - label_offset
+            ha = "right"
+
+        ax.text(
+            x_pos,
+            y_pos,
+            f"{value:.2f}",
+            va="center",
+            ha=ha,
+            fontsize=value_label_font_size,
+        )
+
+    ax.set_title(
+        "Correlations with IMDb Rating:\nMetadata and Dialogue Features",
+        fontsize=PRESENTATION_TITLE_FONT_SIZE,
+        pad=18,
+    )
+    ax.set_xlabel(
+        "Pearson correlation with IMDb rating",
+        fontsize=PRESENTATION_AXIS_LABEL_FONT_SIZE,
+    )
+    ax.set_ylabel(
+        "Feature",
+        fontsize=PRESENTATION_AXIS_LABEL_FONT_SIZE,
+    )
+    ax.grid(True, axis="x", alpha=0.3)
+
+    # Slimmer canvas means long y labels need enough left margin.
+    fig.subplots_adjust(left=0.42, right=0.96, top=0.90, bottom=0.14)
+
+    plt.savefig(OUTPUT_DIR / "rating_dialogue_control_correlations.png", dpi=260)
+    plt.close()
+
+
+def plot_rating_dialogue_control_correlation_heatmap(corr_df):
+    """
+    Plot the same selected metadata and dialogue correlations as a compact heatmap.
+
+    This heatmap is intentionally one-column, so it is less busy than a full
+    pairwise-correlation matrix while still giving a heatmap-style visual.
+    """
+    corr_df = corr_df.copy().sort_values("correlation")
+
+    labels = [
+        get_feature_label(feature) if feature in DIALOGUE_FEATURE_LABELS else {
+            "Year": "Release year",
+            RUNTIME_COL: "Runtime in minutes",
+        }.get(feature, str(feature).replace("_", " ").title())
+        for feature in corr_df["feature"]
+    ]
+
+    values = corr_df["correlation"].to_numpy().reshape(-1, 1)
+
+    fig, ax = plt.subplots(figsize=(12, max(14, 1.05 * len(corr_df))))
+    image = ax.imshow(values, aspect="auto", vmin=-0.25, vmax=0.25)
+
+    cbar = fig.colorbar(image, ax=ax)
+    cbar.set_label(
+        "Pearson correlation with IMDb rating",
+        fontsize=PRESENTATION_AXIS_LABEL_FONT_SIZE,
+    )
+    cbar.ax.tick_params(labelsize=PRESENTATION_TICK_FONT_SIZE)
+
+    y = np.arange(len(labels))
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels, fontsize=PRESENTATION_TICK_FONT_SIZE)
+    ax.set_xticks([0])
+    ax.set_xticklabels(["IMDb rating"], fontsize=PRESENTATION_TICK_FONT_SIZE)
+
+    for i, value in enumerate(corr_df["correlation"]):
+        text_color = "white" if abs(value) >= 0.12 else "black"
+        ax.text(
+            0,
+            i,
+            f"{value:.2f}",
+            ha="center",
+            va="center",
+            fontsize=PRESENTATION_ANNOTATION_FONT_SIZE,
+            color=text_color,
+        )
+
+    ax.set_title(
+        "Correlation Heatmap with IMDb Rating:\nMetadata and Dialogue Features",
+        fontsize=PRESENTATION_TITLE_FONT_SIZE,
+        pad=34,
+    )
+    ax.set_ylabel("Feature", fontsize=PRESENTATION_AXIS_LABEL_FONT_SIZE)
+
+    fig.subplots_adjust(left=0.58, right=0.88, top=0.82, bottom=0.08)
+
+    plt.savefig(OUTPUT_DIR / "rating_dialogue_control_heatmap.png", dpi=260)
+    plt.close()
 
 
 def run_simple_regression_checks(dataset):

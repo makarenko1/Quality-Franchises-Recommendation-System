@@ -3,7 +3,10 @@ import re
 import importlib.util
 from collections import Counter
 
+import nltk
 import pandas as pd
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
 
 
 DATASETS_DIR = Path("datasets")
@@ -38,7 +41,7 @@ MAIN_DATASET = Path("dataset.csv")
 RATINGS_AND_TAGS_DATASET = Path("dataset_ratings_and_tags.csv")
 ANALYSIS_SCRIPT = Path("analyze_data.py")
 
-LANGUAGE_FEATURE_VERSION = 2
+LANGUAGE_FEATURE_VERSION = 4
 LANGUAGE_FEATURE_VERSION_COL = "language_feature_version"
 
 SUBTITLE_FEATURE_COLUMNS = {
@@ -67,6 +70,18 @@ SUBTITLE_FEATURE_COLUMNS = {
     "duplicate_line_count",
     "most_common_line_frequency",
     "repeated_short_phrase_ratio",
+
+    # Optional content-word vocabulary/repetition features.
+    # These remove NLTK stopwords and stem tokens, but do not replace the
+    # original unfiltered dialogue features.
+    "content_stemmed_num_tokens",
+    "content_stemmed_num_unique_tokens",
+    "content_stemmed_type_token_ratio",
+    "content_stemmed_hapax_ratio",
+    "content_stemmed_top_word_frequency_ratio",
+    "content_stemmed_bigram_repetition_ratio",
+    "content_stemmed_trigram_repetition_ratio",
+    "content_stemmed_repeated_short_phrase_ratio",
 
     # Sentiment / emotion proxies
     "average_sentiment",
@@ -1547,6 +1562,8 @@ def preprocess_opensubtitles(
                 **get_dialogue_length_features(dialogue_text, dialogue_lines),
                 **get_dialogue_richness(dialogue_text),
                 **get_dialogue_repetition(dialogue_text, dialogue_lines),
+                **get_content_stemmed_vocabulary_features(dialogue_text),
+                **get_content_stemmed_repetition_features(dialogue_text),
                 **get_dialogue_style_features(raw_lines, dialogue_text),
                 **get_dialogue_sentiment_features(dialogue_text),
                 **get_dialogue_readability_features(raw_lines, dialogue_text),
@@ -1764,6 +1781,87 @@ def get_dialogue_repetition(
     }
 
 
+def get_content_stemmed_vocabulary_features(dialogue_text: str) -> dict:
+    """
+    Measure vocabulary richness after removing NLTK English stopwords and
+    stemming tokens with PorterStemmer.
+
+    These are optional additional features. They do not replace the original
+    unfiltered and unstemmed vocabulary features, because stopwords and original
+    word forms are still useful for dialogue style, readability, sentiment, and
+    pronoun-based features.
+    """
+    tokens = _content_stemmed_tokens(dialogue_text)
+
+    if not tokens:
+        return {
+            "content_stemmed_num_tokens": 0,
+            "content_stemmed_num_unique_tokens": 0,
+            "content_stemmed_type_token_ratio": 0,
+            "content_stemmed_hapax_ratio": 0,
+        }
+
+    token_counts = Counter(tokens)
+    hapax_count = sum(1 for count in token_counts.values() if count == 1)
+
+    return {
+        "content_stemmed_num_tokens": len(tokens),
+        "content_stemmed_num_unique_tokens": len(token_counts),
+        "content_stemmed_type_token_ratio": len(token_counts) / len(tokens),
+        "content_stemmed_hapax_ratio": hapax_count / len(token_counts),
+    }
+
+
+def get_content_stemmed_repetition_features(dialogue_text: str) -> dict:
+    """
+    Measure repeated content words and phrases after removing NLTK English
+    stopwords and stemming tokens with PorterStemmer.
+
+    These features focus on repeated meaningful stems instead of repeated
+    function words such as articles, pronouns, and prepositions.
+    """
+    tokens = _content_stemmed_tokens(dialogue_text)
+
+    if not tokens:
+        return {
+            "content_stemmed_top_word_frequency_ratio": 0,
+            "content_stemmed_bigram_repetition_ratio": 0,
+            "content_stemmed_trigram_repetition_ratio": 0,
+            "content_stemmed_repeated_short_phrase_ratio": 0,
+        }
+
+    token_counts = Counter(tokens)
+
+    bigrams = list(zip(tokens, tokens[1:]))
+    trigrams = list(zip(tokens, tokens[1:], tokens[2:]))
+
+    bigram_counts = Counter(bigrams)
+    trigram_counts = Counter(trigrams)
+
+    repeated_bigrams = sum(
+        count for count in bigram_counts.values()
+        if count > 1
+    )
+    repeated_trigrams = sum(
+        count for count in trigram_counts.values()
+        if count > 1
+    )
+
+    repeated_short_phrases = repeated_bigrams + repeated_trigrams
+    total_short_phrases = len(bigrams) + len(trigrams)
+
+    return {
+        "content_stemmed_top_word_frequency_ratio": token_counts.most_common(1)[0][1] / len(tokens),
+        "content_stemmed_bigram_repetition_ratio": repeated_bigrams / len(bigrams) if bigrams else 0,
+        "content_stemmed_trigram_repetition_ratio": repeated_trigrams / len(trigrams) if trigrams else 0,
+        "content_stemmed_repeated_short_phrase_ratio": (
+            repeated_short_phrases / total_short_phrases
+            if total_short_phrases
+            else 0
+        ),
+    }
+
+
 COMMON_WORDS = {
     "the", "be", "to", "of", "and", "a", "in", "that", "have", "i",
     "it", "for", "not", "on", "with", "he", "as", "you", "do", "at",
@@ -1819,6 +1917,18 @@ FIRST_PERSON_PRONOUNS = {
 SECOND_PERSON_PRONOUNS = {
     "you", "your", "yours", "yourself", "yourselves",
 }
+
+
+try:
+    nltk.download('stopwords')
+    NLTK_STOPWORDS = set(stopwords.words("english"))
+except LookupError as exc:
+    raise LookupError(
+        "NLTK stopwords corpus is missing. Run this once before executing the "
+        "pipeline: import nltk; nltk.download('stopwords')"
+    ) from exc
+
+STEMMER = PorterStemmer()
 
 
 def get_dialogue_style_features(
@@ -2068,6 +2178,30 @@ def _tokenize(text: str) -> list[str]:
         return []
 
     return re.findall(r"[a-z']+", text.lower())
+
+
+def _content_stemmed_tokens(text: str) -> list[str]:
+    """
+    Tokenize cleaned dialogue text, remove NLTK English stopwords, and stem
+    tokens with PorterStemmer.
+
+    This is used only for optional content-word vocabulary and repetition
+    features. The main dialogue features still use the original unstemmed tokens.
+    """
+    content_tokens = []
+
+    for token in _tokenize(text):
+        clean_token = token.replace("'", "")
+
+        if len(clean_token) <= 1:
+            continue
+
+        if clean_token in NLTK_STOPWORDS:
+            continue
+
+        content_tokens.append(STEMMER.stem(clean_token))
+
+    return content_tokens
 
 
 if __name__ == "__main__":
