@@ -603,7 +603,7 @@ def plot_mean_rating_by_installment(franchise_df):
 
     plt.title(
         "Mean IMDb Rating by Franchise Installment",
-        fontsize=PRESENTATION_TITLE_FONT_SIZE + 5,
+        fontsize=PRESENTATION_TITLE_FONT_SIZE + 4,
         pad=20,
     )
     plt.xlabel(
@@ -2682,7 +2682,7 @@ def plot_rating_dialogue_control_correlation_bars(corr_df):
         )
 
     ax.set_title(
-        "Correlations with IMDb Rating:\nMetadata and Dialogue Features",
+        "Movie Feature Pearson Correlations\nwith IMDb Rating",
         fontsize=PRESENTATION_TITLE_FONT_SIZE,
         pad=18,
     )
