@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 import random
 
+
+from recommendations_algorithm import (
+    load_dialogue_features, load_svd_model, detect_franchises, recommend
+)
+
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Movie Recommender",
@@ -171,9 +176,8 @@ st.markdown("""
 @st.cache_data
 def load_movies():
     df = pd.read_csv(
-        "datasets/movies-1M/movies_clean.csv",
+        "datasets/movies-32M/movies_clean.csv",
         dtype={"MovieID": int, "Year": "Int64"},
-        low_memory=False
     )
     genre_cols = [c for c in df.columns if c.startswith("Genre")]
     df["genres"] = df[genre_cols].apply(
@@ -181,11 +185,14 @@ def load_movies():
     )
     return df
 
+@st.cache_resource
+def load_models():
+    movies = pd.read_csv("datasets/movies-32M/movies_clean.csv")
+    dq_map = load_dialogue_features("subs/")
+    movie_ids, movie_factors = load_svd_model("datasets/movies-32M/movies_ratings_clean.csv")
+    franchise_map = detect_franchises(movies)
+    return movies, dq_map, movie_ids, movie_factors, franchise_map
 
-def get_random_suggestions(df, exclude_ids, n=3):
-    """Placeholder — replace with your recommendation function later."""
-    pool = df[~df["MovieID"].isin(exclude_ids)]
-    return pool.sample(n=min(n, len(pool))).reset_index(drop=True)
 
 
 def movie_card_html(row, badge=None):
@@ -212,8 +219,7 @@ def movie_card_html(row, badge=None):
 
 # ── App ───────────────────────────────────────────────────────────────────────
 movies_df = load_movies()
-movie_titles = sorted(movies_df["Title"].tolist())
-
+movie_titles = sorted(movies_df["Title"].dropna().astype(str).tolist())
 st.markdown("""
 <div class="hero-wrap">
   <div class="hero-title">🎬 Movie <span>Recommender</span></div>
@@ -259,12 +265,27 @@ st.markdown('<div class="section-header">Suggested for You</div>', unsafe_allow_
 selected_ids = movies_df[movies_df["Title"].isin(selections)]["MovieID"].tolist()
 
 # Re-generate suggestions whenever the selection changes
+movies_model, dq_map, movie_ids, movie_factors, franchise_map = load_models()
+
 if st.session_state.get("last_selections") != selections:
     st.session_state.last_selections = selections
-    st.session_state.suggestions = get_random_suggestions(movies_df, selected_ids)
-
+    if len(selections) == 3:
+        results = recommend(
+            selections, movies_model, movie_ids,
+            movie_factors, dq_map, franchise_map, n=3
+        )
+        rec_titles = [r["title"] for r in results]
+        st.session_state.suggestions = movies_df[
+            movies_df["Title"].isin(rec_titles)
+        ].reset_index(drop=True)
+    else:
+        st.session_state.suggestions = movies_df[
+            ~movies_df["MovieID"].isin(selected_ids)
+        ].sample(n=3).reset_index(drop=True)
 sugg_cols = st.columns(3)
 for i, (_, row) in enumerate(st.session_state.suggestions.iterrows()):
+    if i >= 3:
+        break
     with sugg_cols[i]:
         st.markdown(movie_card_html(row), unsafe_allow_html=True)
 

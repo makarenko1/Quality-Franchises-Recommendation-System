@@ -56,8 +56,7 @@ def load_dialogue_features(subs_dir):
 def load_svd_model(ratings_path):
     print("Building SVD model from ratings...")
     if ratings_path.endswith('.csv'):
-        df = pd.read_csv(ratings_path, usecols=['userId', 'movieId', 'rating'], low_memory=False)
-        df.columns = ['UserID', 'MovieID', 'Rating']
+        df = pd.read_csv(ratings_path, usecols=['UserID', 'MovieID', 'Rating'], low_memory=False)
     else:
         ratings = []
         with open(ratings_path) as f:
@@ -90,7 +89,7 @@ def detect_franchises(movies_df):
         return t.strip().lower()
 
     movies_df = movies_df.copy()
-    movies_df['base'] = movies_df['Title'].apply(base_title)
+    movies_df['base'] = movies_df['Title'].dropna().astype(str).apply(base_title)
     groups = movies_df.groupby('base')['MovieID'].apply(list)
     result = {}
     for base, mids in groups.items():
