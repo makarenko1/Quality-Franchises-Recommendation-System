@@ -24,6 +24,7 @@ Recommendations are scored from three signals (weights sum to 1.0):
 .
 ├── main.py                        # Data pipeline: builds dataset.csv
 ├── recommendations_algorithm.py   # SVD + dialogue + franchise scoring
+├── evaluate.py                    # Offline evaluation against recommendation baselines
 ├── baselines.py                   # Popular / highest-rated / random baselines
 ├── app.py                         # Streamlit web UI
 ├── analyze_data.py                # EDA and correlation analysis
@@ -95,6 +96,24 @@ python recommendations_algorithm.py
 ```
 
 Interactive loop — enter three titles, get scored recommendations with component breakdown.
+
+### Evaluation
+
+```bash
+python evaluate.py
+```
+
+Runs the offline evaluation pipeline for the final recommender. The script:
+
+- loads `dataset_ratings_and_tags.csv`, combining MovieLens 1M and 32M ratings;
+- splits ratings per user into train and held-out test sets;
+- fits the biased SVD rating model and selects the best latent dimension from the configured `K_VALUES`;
+- evaluates RMSE against a global-mean rating baseline;
+- evaluates the actual recommendation function from `recommendations_algorithm.py` against three baselines: most popular, highest Bayesian-rated, and random;
+- uses `dataset.csv` as the movie metadata source so the candidate set matches the project dataset rather than only the MovieLens 1M cleaned movie file;
+- reports candidate-set diagnostics, Precision@10, Recall@10, RMSE, franchise-rating correlations, and dialogue-feature correlations.
+
+The final recommender is evaluated using the same shared scoring path as the command-line recommender. The evaluation represents each test user by relevant movies from their training ratings, calls the shared MovieID-based recommendation wrapper, and compares the resulting top-10 list with relevant held-out movies.
 
 ### Baselines
 
