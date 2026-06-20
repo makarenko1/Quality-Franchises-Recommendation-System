@@ -99,7 +99,7 @@ Interactive loop — enter three titles, get scored recommendations with compone
 ### Baselines
 
 ```bash
-python baselines.py
+python interactive_baselines.py
 ```
 
 Runs the three non-personalised baselines: most popular, highest Bayesian-rated, and random.
