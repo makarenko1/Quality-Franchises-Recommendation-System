@@ -219,8 +219,18 @@ def movie_card_html(row, badge=None):
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
+# Use all movies from dataset.csv in the UI. Some metadata-only movies may not
+# have rating factors; those movies can still be searched/previewed, but they
+# cannot influence the SVD component of the recommender.
+movies_model, dq_map, movie_ids, movie_factors, movie_quality_scores, franchise_map = load_models()
 movies_df = load_movies()
-movie_titles = sorted(movies_df["Title"].dropna().astype(str).tolist())
+available_movie_ids = set(int(mid) for mid in movie_ids)
+movies_df = movies_df.reset_index(drop=True)
+movies_df["display_title"] = movies_df.apply(
+    lambda row: f"{row['Title']} ({int(row['Year'])})" if pd.notna(row["Year"]) else str(row["Title"]),
+    axis=1,
+)
+
 st.markdown("""
 <div class="hero-wrap">
   <div class="hero-title">🎬 Movie <span>Recommender</span></div>
@@ -231,15 +241,42 @@ st.markdown("""
 # ── Section 1: Pick your movies ───────────────────────────────────────────────
 st.markdown('<div class="section-header">Pick 3 Movies You Love</div>', unsafe_allow_html=True)
 
+
+def movie_search_picker(label: str, key: str):
+    """Search all of dataset.csv, then choose from the matching movies."""
+    query = st.text_input(f"Search {label}", key=f"{key}_search", placeholder="Type part of a movie title...")
+    if query.strip():
+        mask = movies_df["Title"].astype(str).str.contains(query.strip(), case=False, regex=False, na=False)
+        options = movies_df.loc[mask, "MovieID"].head(100).astype(int).tolist()
+    else:
+        options = []
+
+    if not options:
+        st.selectbox(label, ["— Search first —"], key=key, disabled=True)
+        return None
+
+    selected_mid = st.selectbox(
+        label,
+        options,
+        key=key,
+        format_func=lambda mid: movies_df.loc[movies_df["MovieID"] == mid, "display_title"].iloc[0],
+    )
+    row = movies_df[movies_df["MovieID"] == int(selected_mid)].iloc[0]
+    if int(selected_mid) not in available_movie_ids:
+        st.caption("Metadata-only movie: it can be displayed, but it will not affect SVD recommendations.")
+    return row
+
+
 col1, col2, col3 = st.columns(3)
 with col1:
-    pick1 = st.selectbox("Movie 1", ["— Select a movie —"] + movie_titles, key="p1")
+    row1 = movie_search_picker("Movie 1", "p1")
 with col2:
-    pick2 = st.selectbox("Movie 2", ["— Select a movie —"] + movie_titles, key="p2")
+    row2 = movie_search_picker("Movie 2", "p2")
 with col3:
-    pick3 = st.selectbox("Movie 3", ["— Select a movie —"] + movie_titles, key="p3")
+    row3 = movie_search_picker("Movie 3", "p3")
 
-selections = [p for p in [pick1, pick2, pick3] if p != "— Select a movie —"]
+selected_rows = [row for row in [row1, row2, row3] if row is not None]
+selections = [str(row["Title"]) for row in selected_rows]
 
 # Show selected pills
 if selections:
@@ -250,11 +287,10 @@ if selections:
     st.markdown(f'<div style="margin-top:0.8rem;">{pills_html}</div>', unsafe_allow_html=True)
 
 # Preview cards for selected movies
-if selections:
+if selected_rows:
     st.markdown("<br>", unsafe_allow_html=True)
     card_cols = st.columns(3)
-    for i, title in enumerate(selections):
-        row = movies_df[movies_df["Title"] == title].iloc[0]
+    for i, row in enumerate(selected_rows):
         with card_cols[i]:
             st.markdown(movie_card_html(row, badge=f"Pick #{i+1}"), unsafe_allow_html=True)
 
@@ -266,8 +302,6 @@ st.markdown('<div class="section-header">Suggested for You</div>', unsafe_allow_
 selected_ids = movies_df[movies_df["Title"].isin(selections)]["MovieID"].tolist()
 
 # Re-generate suggestions whenever the selection changes
-movies_model, dq_map, movie_ids, movie_factors, movie_quality_scores, franchise_map = load_models()
-
 if st.session_state.get("last_selections") != selections:
     st.session_state.last_selections = selections
     if len(selections) == 3:
@@ -276,13 +310,20 @@ if st.session_state.get("last_selections") != selections:
             movie_factors, movie_quality_scores, dq_map, franchise_map, n=3
         )
         rec_titles = [r["title"] for r in results]
-        st.session_state.suggestions = movies_df[
-            movies_df["Title"].isin(rec_titles)
-        ].reset_index(drop=True)
+        ordered_rows = []
+        for title in rec_titles:
+            match = movies_df[movies_df["Title"] == title]
+            if not match.empty:
+                ordered_rows.append(match.iloc[0])
+        if ordered_rows:
+            st.session_state.suggestions = pd.DataFrame(ordered_rows).reset_index(drop=True)
+        else:
+            st.session_state.suggestions = movies_df[
+                ~movies_df["MovieID"].isin(selected_ids)
+            ].sample(n=min(3, len(movies_df)), random_state=42).reset_index(drop=True)
     else:
-        st.session_state.suggestions = movies_df[
-            ~movies_df["MovieID"].isin(selected_ids)
-        ].sample(n=3).reset_index(drop=True)
+        pool = movies_df[~movies_df["MovieID"].isin(selected_ids)]
+        st.session_state.suggestions = pool.sample(n=min(3, len(pool)), random_state=42).reset_index(drop=True)
 sugg_cols = st.columns(3)
 for i, (_, row) in enumerate(st.session_state.suggestions.iterrows()):
     if i >= 3:
