@@ -1475,7 +1475,7 @@ def get_movie_ids_needing_language_features(dataset):
 
     subtitle_rows = dataset["MovieID"].isin(candidate_movie_ids)
 
-    feature_cols = list(LANGUAGE_FEATURE_COLUMNS - {LANGUAGE_FEATURE_VERSION_COL})
+    feature_cols = list(SUBTITLE_FEATURE_COLUMNS)
     feature_missing = dataset.loc[subtitle_rows, feature_cols].isna().any(axis=1)
 
     version_values = pd.to_numeric(
