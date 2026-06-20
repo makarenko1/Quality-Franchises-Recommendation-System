@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
-import random
-
-
 from recommendations_algorithm import (
-    load_dialogue_features, load_svd_model, detect_franchises, recommend
+    load_dialogue_features,
+    load_svd_model,
+    load_franchise_map,
+    load_movies_metadata,
+    recommend,
 )
 
 # ── Page config ──────────────────────────────────────────────────────────────
@@ -175,10 +176,10 @@ st.markdown("""
 # ── Data loading ──────────────────────────────────────────────────────────────
 @st.cache_data
 def load_movies():
-    df = pd.read_csv(
-        "datasets/movies-32M/movies_clean.csv",
-        dtype={"MovieID": int, "Year": "Int64"},
-    )
+    # Use dataset.csv as the app's movie metadata source. This is the same
+    # project dataset used by evaluation and already includes detected franchise
+    # fields such as FranchiseName and FranchiseInstallment.
+    df = load_movies_metadata("dataset.csv")
     genre_cols = [c for c in df.columns if c.startswith("Genre")]
     df["genres"] = df[genre_cols].apply(
         lambda row: [g for g in row if pd.notna(g) and g != ""], axis=1
@@ -187,11 +188,11 @@ def load_movies():
 
 @st.cache_resource
 def load_models():
-    movies = pd.read_csv("datasets/movies-32M/movies_clean.csv")
-    dq_map = load_dialogue_features("subs/")
-    movie_ids, movie_factors = load_svd_model("datasets/movies-32M/movies_ratings_clean.csv")
-    franchise_map = detect_franchises(movies)
-    return movies, dq_map, movie_ids, movie_factors, franchise_map
+    movies = load_movies_metadata("dataset.csv")
+    dq_map = load_dialogue_features("dataset.csv")
+    movie_ids, movie_factors, movie_quality_scores = load_svd_model()
+    franchise_map = load_franchise_map("dataset.csv")
+    return movies, dq_map, movie_ids, movie_factors, movie_quality_scores, franchise_map
 
 
 
@@ -227,7 +228,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Section 1: Pick your movies-1M ───────────────────────────────────────────────
+# ── Section 1: Pick your movies ───────────────────────────────────────────────
 st.markdown('<div class="section-header">Pick 3 Movies You Love</div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
@@ -248,7 +249,7 @@ if selections:
     )
     st.markdown(f'<div style="margin-top:0.8rem;">{pills_html}</div>', unsafe_allow_html=True)
 
-# Preview cards for selected movies-1M
+# Preview cards for selected movies
 if selections:
     st.markdown("<br>", unsafe_allow_html=True)
     card_cols = st.columns(3)
@@ -265,14 +266,14 @@ st.markdown('<div class="section-header">Suggested for You</div>', unsafe_allow_
 selected_ids = movies_df[movies_df["Title"].isin(selections)]["MovieID"].tolist()
 
 # Re-generate suggestions whenever the selection changes
-movies_model, dq_map, movie_ids, movie_factors, franchise_map = load_models()
+movies_model, dq_map, movie_ids, movie_factors, movie_quality_scores, franchise_map = load_models()
 
 if st.session_state.get("last_selections") != selections:
     st.session_state.last_selections = selections
     if len(selections) == 3:
         results = recommend(
             selections, movies_model, movie_ids,
-            movie_factors, dq_map, franchise_map, n=3
+            movie_factors, movie_quality_scores, dq_map, franchise_map, n=3
         )
         rec_titles = [r["title"] for r in results]
         st.session_state.suggestions = movies_df[
@@ -292,6 +293,6 @@ for i, (_, row) in enumerate(st.session_state.suggestions.iterrows()):
 # Footer note
 st.markdown("""
 <div style="text-align:center;color:#bbb;font-size:0.75rem;margin-top:3rem;border-top:1px solid #e8e0d5;padding-top:1.5rem;">
-  Suggestions are random placeholders — your recommendation engine goes here.
+  Suggestions use the SVD + dialogue quality + dataset.csv franchise-aware recommender.
 </div>
 """, unsafe_allow_html=True)
