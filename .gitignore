@@ -6,3 +6,8 @@ datasets/movies-32M/movies_ratings_clean.csv
 datasets/movies-32M/movies_ratings_clean.csv
 datasets/movies-32M/movies_tags_clean.csv
 dataset_ratings_and_tags.csv
+
+.streamlit/secrets.toml
+survey-web/.streamlit/secrets.toml
+survey-web/.env
+.vercel/
