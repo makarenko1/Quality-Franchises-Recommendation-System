@@ -29,28 +29,38 @@ function doPost(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// סימן גרסה — מאפשר לוודא מבחוץ (curl על ה-/exec) שהקוד החדש באמת פרוס.
 function doGet() {
-  return ContentService.createTextOutput("Survey endpoint is live");
+  return ContentService.createTextOutput("Survey endpoint is live — v2 (scores)");
 }
 
-// כותב שורה אחת לגיליון (ומוסיף כותרות בפעם הראשונה).
+var HEADERS = [
+  "timestamp", "name",
+  "rank1_movie_id", "rank1_title", "rank1_year", "rank1_score",
+  "rank2_movie_id", "rank2_title", "rank2_year", "rank2_score",
+  "rank3_movie_id", "rank3_title", "rank3_year", "rank3_score"
+];
+
+// כותב שורה אחת לגיליון. מוודא ששורת הכותרות קיימת ומעודכנת (גם בגיליון
+// שכבר יש בו נתונים מהגרסה הישנה ללא עמודות הציון).
 function saveRow(data) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
 
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow([
-      "timestamp", "name",
-      "rank1_movie_id", "rank1_title", "rank1_year",
-      "rank2_movie_id", "rank2_title", "rank2_year",
-      "rank3_movie_id", "rank3_title", "rank3_year"
-    ]);
+    sheet.appendRow(HEADERS);
+  } else {
+    // אם הכותרות קצרות מהמצופה (גרסה ישנה) — מרחיבים אותן.
+    var firstRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (firstRow.length < HEADERS.length || firstRow[5] !== "rank1_score") {
+      sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    }
   }
 
   sheet.appendRow([
     data.timestamp, data.name,
-    data.rank1_movie_id, data.rank1_title, data.rank1_year,
-    data.rank2_movie_id, data.rank2_title, data.rank2_year,
-    data.rank3_movie_id, data.rank3_title, data.rank3_year
+    data.rank1_movie_id, data.rank1_title, data.rank1_year, data.rank1_score,
+    data.rank2_movie_id, data.rank2_title, data.rank2_year, data.rank2_score,
+    data.rank3_movie_id, data.rank3_title, data.rank3_year, data.rank3_score
   ]);
 }
 
@@ -59,8 +69,8 @@ function testDoPost() {
   saveRow({
     timestamp: new Date().toISOString(),
     name: "Test User",
-    rank1_movie_id: 6, rank1_title: "Heat", rank1_year: 1995,
-    rank2_movie_id: 3, rank2_title: "Grumpier Old Men", rank2_year: 1995,
-    rank3_movie_id: 4, rank3_title: "Waiting to Exhale", rank3_year: 1995
+    rank1_movie_id: 6, rank1_title: "Heat", rank1_year: 1995, rank1_score: 10,
+    rank2_movie_id: 3, rank2_title: "Grumpier Old Men", rank2_year: 1995, rank2_score: 7,
+    rank3_movie_id: 4, rank3_title: "Waiting to Exhale", rank3_year: 1995, rank3_score: 5
   });
 }

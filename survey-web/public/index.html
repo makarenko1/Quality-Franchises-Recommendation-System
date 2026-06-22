@@ -41,6 +41,19 @@
     .slots { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
     .slot { display: flex; align-items: flex-start; gap: 10px; }
     .medal { font-size: 1.6rem; flex-shrink: 0; line-height: 1.6; }
+    .slot-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+    /* Rating 1-10 */
+    .rating { display: flex; flex-direction: column; gap: 6px; padding: 2px 2px 0; }
+    .rating[hidden] { display: none; }
+    .rating-label { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+    .rating-pills { display: flex; gap: 5px; }
+    .rating-pill {
+      flex: 1; min-width: 0; height: 34px; padding: 0;
+      border: 1px solid var(--line); background: var(--card); color: var(--text);
+      border-radius: 8px; font: inherit; font-size: 0.9rem; cursor: pointer;
+    }
+    .rating-pill.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
 
     /* Combobox */
     .combo { position: relative; flex: 1; min-width: 0; }
@@ -99,7 +112,7 @@
 <body>
   <header>
     <h1>🎬 סקר <span>סרטים</span></h1>
-    <div class="sub">בחרו שלושה סרטים אהובים ודרגו אותם מ-1 עד 3</div>
+    <div class="sub">בחרו שלושה סרטים אהובים ותנו לכל אחד ציון מ-1 עד 5</div>
   </header>
 
   <div class="field-label">השם שלך</div>
@@ -123,6 +136,7 @@
 
     let MOVIES = [];                 // [id, title, year, genre]
     const picks = [null, null, null]; // selected movie per slot
+    const scores = [null, null, null]; // 1-10 rating per slot
     const combos = [];                // per-slot DOM/state
 
     const $ = (id) => document.getElementById(id);
@@ -138,14 +152,20 @@
         slot.className = "slot";
         slot.innerHTML = `
           <span class="medal">${MEDALS[i]}</span>
-          <div class="combo" id="combo${i}">
-            <div class="combo-field placeholder" tabindex="0">
-              <span class="ftext">בחרו סרט למקום ${i + 1}...</span>
-              <span class="caret">▾</span>
+          <div class="slot-body">
+            <div class="combo" id="combo${i}">
+              <div class="combo-field placeholder" tabindex="0">
+                <span class="ftext">בחרו סרט למקום ${i + 1}...</span>
+                <span class="caret">▾</span>
+              </div>
+              <div class="combo-panel">
+                <input type="search" class="combo-search" placeholder="חיפוש סרט..." autocomplete="off" />
+                <ul class="combo-list"></ul>
+              </div>
             </div>
-            <div class="combo-panel">
-              <input type="search" class="combo-search" placeholder="חיפוש סרט..." autocomplete="off" />
-              <ul class="combo-list"></ul>
+            <div class="rating" hidden>
+              <div class="rating-label">הציון שלך לסרט (1 = הכי נמוך, 5 = הכי גבוה)</div>
+              <div class="rating-pills"></div>
             </div>
           </div>`;
         wrap.appendChild(slot);
@@ -157,9 +177,20 @@
           ftext: root.querySelector(".ftext"),
           search: root.querySelector(".combo-search"),
           list: root.querySelector(".combo-list"),
+          rating: slot.querySelector(".rating"),
+          pills: slot.querySelector(".rating-pills"),
           filtered: [], shown: 0,
         };
         combos.push(state);
+
+        for (let n = 1; n <= 5; n++) {
+          const pill = document.createElement("button");
+          pill.type = "button";
+          pill.className = "rating-pill";
+          pill.textContent = n;
+          pill.addEventListener("click", () => setScore(i, n));
+          state.pills.appendChild(pill);
+        }
 
         state.field.addEventListener("click", () => toggle(i));
         state.field.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(i); } });
@@ -239,8 +270,24 @@
         btn.addEventListener("click", (e) => { e.stopPropagation(); clearPick(i); });
         st.field.insertBefore(btn, st.field.querySelector(".caret"));
       }
+      st.rating.hidden = false;
       closeAll();
       updateSubmit();
+    }
+
+    function setScore(i, n) {
+      scores[i] = n;
+      const pills = combos[i].pills.children;
+      for (let k = 0; k < pills.length; k++) {
+        pills[k].classList.toggle("selected", k + 1 === n);
+      }
+      updateSubmit();
+    }
+
+    function clearScore(i) {
+      scores[i] = null;
+      const pills = combos[i].pills.children;
+      for (const p of pills) p.classList.remove("selected");
     }
 
     function clearPick(i) {
@@ -250,11 +297,13 @@
       st.ftext.textContent = `בחרו סרט למקום ${i + 1}...`;
       const btn = st.root.querySelector(".combo-clear");
       if (btn) btn.remove();
+      st.rating.hidden = true;
+      clearScore(i);
       updateSubmit();
     }
 
     function updateSubmit() {
-      const ready = picks.every((p) => p) && $("name").value.trim();
+      const ready = picks.every((p) => p) && scores.every((s) => s) && $("name").value.trim();
       $("submit").disabled = !ready;
       $("submit").textContent = "שליחת הסקר";
     }
@@ -268,7 +317,7 @@
 
     async function submit() {
       const name = $("name").value.trim();
-      if (!picks.every((p) => p) || !name) return;
+      if (!picks.every((p) => p) || !scores.every((s) => s) || !name) return;
       const btn = $("submit");
       btn.disabled = true;
       btn.textContent = "שולח...";
@@ -277,6 +326,7 @@
         payload[`rank${idx + 1}_movie_id`] = m[0];
         payload[`rank${idx + 1}_title`] = m[1];
         payload[`rank${idx + 1}_year`] = m[2] || "";
+        payload[`rank${idx + 1}_score`] = scores[idx];
       });
       try {
         const resp = await fetch("/api/submit", {
