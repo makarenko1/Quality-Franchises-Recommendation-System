@@ -340,7 +340,7 @@ The current cleaned survey sheet contains 15 unique respondents and 45 movie row
 Run:
 
 ```bash
-python build_recommendation_survey.py
+python generate_recommendations.py
 ```
 
 The script outputs only:
@@ -421,5 +421,5 @@ streamlit run app.py
 For the participant follow-up recommendations:
 
 ```bash
-python build_recommendation_survey.py
+python generate_recommendations.py
 ```
