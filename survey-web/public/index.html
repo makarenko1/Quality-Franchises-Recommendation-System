@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <title>🎬 סקר סרטים</title>
+  <style>
+    :root {
+      --bg: #faf9f7;
+      --card: #ffffff;
+      --line: #e8e0d5;
+      --accent: #8b1a1a;
+      --gold: #c9a96e;
+      --text: #1a1a1a;
+      --muted: #888;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      line-height: 1.5;
+      padding: 16px;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    header { text-align: center; padding: 12px 0 4px; }
+    h1 { font-size: 1.6rem; margin: 0 0 4px; }
+    h1 span { color: var(--accent); }
+    .sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 16px; }
+
+    .field-label { font-weight: 600; font-size: 0.95rem; margin: 8px 2px 6px; }
+    input[type="text"], input[type="search"] {
+      width: 100%; padding: 14px 16px; font-size: 16px;
+      border: 1px solid var(--line); border-radius: 12px;
+      background: var(--card); color: var(--text); outline: none;
+    }
+    input:focus { border-color: var(--gold); }
+
+    .slots { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+    .slot { display: flex; align-items: flex-start; gap: 10px; }
+    .medal { font-size: 1.6rem; flex-shrink: 0; line-height: 1.6; }
+    .slot-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+    /* Rating 1-10 */
+    .rating { display: flex; flex-direction: column; gap: 6px; padding: 2px 2px 0; }
+    .rating[hidden] { display: none; }
+    .rating-label { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+    .rating-pills { display: flex; gap: 5px; }
+    .rating-pill {
+      flex: 1; min-width: 0; height: 34px; padding: 0;
+      border: 1px solid var(--line); background: var(--card); color: var(--text);
+      border-radius: 8px; font: inherit; font-size: 0.9rem; cursor: pointer;
+    }
+    .rating-pill.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* Combobox */
+    .combo { position: relative; flex: 1; min-width: 0; }
+    .combo-field {
+      width: 100%; display: flex; align-items: center; gap: 8px;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 12px; padding: 13px 14px; cursor: pointer; text-align: start;
+      font: inherit; color: var(--text);
+    }
+    .combo.open .combo-field { border-color: var(--gold); }
+    .combo-field.placeholder { color: var(--muted); }
+    .combo-field .ftext { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .combo-field .caret { color: var(--muted); flex-shrink: 0; }
+    .combo-clear {
+      border: none; background: #f3eee7; color: var(--accent);
+      border-radius: 8px; width: 28px; height: 28px; font-size: 1rem;
+      cursor: pointer; flex-shrink: 0;
+    }
+
+    .combo-panel {
+      position: absolute; inset-inline: 0; top: calc(100% + 6px);
+      background: var(--card); border: 1px solid var(--gold);
+      border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.14);
+      z-index: 50; overflow: hidden; display: none;
+    }
+    .combo.open .combo-panel { display: block; }
+    .combo-search { border: none !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important; }
+    .combo-list { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .combo-item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; border-bottom: 1px solid #f2ece4; }
+    .combo-item:active, .combo-item:hover { background: #f5f0ea; }
+    .r-emoji { font-size: 1.25rem; }
+    .r-body { flex: 1; min-width: 0; }
+    .r-title { font-weight: 600; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .r-meta { color: var(--muted); font-size: 0.78rem; }
+    .combo-empty { padding: 14px; color: var(--muted); font-size: 0.9rem; text-align: center; }
+
+    button.submit {
+      width: 100%; margin-top: 18px; padding: 15px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer;
+    }
+    button.submit:disabled { background: #cbb8b8; cursor: not-allowed; }
+
+    .toast {
+      position: fixed; inset-inline: 16px; bottom: 16px;
+      background: #1a1a1a; color: #fff; padding: 14px 16px;
+      border-radius: 12px; text-align: center; font-size: 0.95rem;
+      opacity: 0; transform: translateY(20px); transition: all 0.25s;
+      pointer-events: none; max-width: 608px; margin: 0 auto;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.ok { background: #1b6b3a; }
+    .toast.err { background: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎬 סקר <span>סרטים</span></h1>
+    <div class="sub">בחרו שלושה סרטים אהובים ותנו לכל אחד ציון מ-1 עד 5</div>
+  </header>
+
+  <div class="field-label">השם שלך</div>
+  <input type="text" id="name" placeholder="איך קוראים לך?" autocomplete="name" />
+
+  <div class="slots" id="slots"></div>
+
+  <button class="submit" id="submit" disabled>טוען רשימת סרטים...</button>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const EMOJI = {
+      Action:"💥", Comedy:"😂", Drama:"🎭", Horror:"👻", Romance:"❤️",
+      "Sci-Fi":"🚀", Animation:"🎨", Adventure:"🗺️", Thriller:"🔪",
+      Crime:"🕵️", Fantasy:"🧙", Children:"👦", Documentary:"🎥",
+      Musical:"🎵", Western:"🤠", War:"⚔️", Mystery:"🔍"
+    };
+    const MEDALS = ["🥇", "🥈", "🥉"];
+    const BATCH = 60;
+
+    let MOVIES = [];                 // [id, title, year, genre]
+    const picks = [null, null, null]; // selected movie per slot
+    const scores = [null, null, null]; // 1-10 rating per slot
+    const combos = [];                // per-slot DOM/state
+
+    const $ = (id) => document.getElementById(id);
+    const emojiFor = (g) => EMOJI[g] || "🎬";
+    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
+      ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+
+    function buildSlots() {
+      const wrap = $("slots");
+      wrap.innerHTML = "";
+      for (let i = 0; i < 3; i++) {
+        const slot = document.createElement("div");
+        slot.className = "slot";
+        slot.innerHTML = `
+          <span class="medal">${MEDALS[i]}</span>
+          <div class="slot-body">
+            <div class="combo" id="combo${i}">
+              <div class="combo-field placeholder" tabindex="0">
+                <span class="ftext">בחרו סרט למקום ${i + 1}...</span>
+                <span class="caret">▾</span>
+              </div>
+              <div class="combo-panel">
+                <input type="search" class="combo-search" placeholder="חיפוש סרט..." autocomplete="off" />
+                <ul class="combo-list"></ul>
+              </div>
+            </div>
+            <div class="rating" hidden>
+              <div class="rating-label">הציון שלך לסרט (1 = הכי נמוך, 5 = הכי גבוה)</div>
+              <div class="rating-pills"></div>
+            </div>
+          </div>`;
+        wrap.appendChild(slot);
+
+        const root = slot.querySelector(".combo");
+        const state = {
+          i, root,
+          field: root.querySelector(".combo-field"),
+          ftext: root.querySelector(".ftext"),
+          search: root.querySelector(".combo-search"),
+          list: root.querySelector(".combo-list"),
+          rating: slot.querySelector(".rating"),
+          pills: slot.querySelector(".rating-pills"),
+          filtered: [], shown: 0,
+        };
+        combos.push(state);
+
+        for (let n = 1; n <= 5; n++) {
+          const pill = document.createElement("button");
+          pill.type = "button";
+          pill.className = "rating-pill";
+          pill.textContent = n;
+          pill.addEventListener("click", () => setScore(i, n));
+          state.pills.appendChild(pill);
+        }
+
+        state.field.addEventListener("click", () => toggle(i));
+        state.field.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(i); } });
+        state.search.addEventListener("input", () => renderList(i));
+        state.search.addEventListener("click", (e) => e.stopPropagation());
+        state.list.addEventListener("scroll", () => {
+          if (state.list.scrollTop + state.list.clientHeight >= state.list.scrollHeight - 120) appendBatch(i);
+        });
+      }
+    }
+
+    function toggle(i) {
+      const open = combos[i].root.classList.contains("open");
+      closeAll();
+      if (!open) {
+        combos[i].root.classList.add("open");
+        renderList(i);
+        setTimeout(() => combos[i].search.focus(), 0);
+      }
+    }
+
+    function closeAll() {
+      combos.forEach((c) => c.root.classList.remove("open"));
+    }
+
+    function renderList(i) {
+      const st = combos[i];
+      const q = st.search.value.trim().toLowerCase();
+      const taken = new Set(picks.filter((p, idx) => p && idx !== i).map((p) => p[0]));
+      const out = [];
+      for (const m of MOVIES) {
+        if (taken.has(m[0])) continue;
+        if (q && !m[1].toLowerCase().includes(q)) continue;
+        out.push(m);
+      }
+      st.filtered = out;
+      st.shown = 0;
+      st.list.innerHTML = "";
+      if (!out.length) {
+        st.list.innerHTML = '<li class="combo-empty">לא נמצאו סרטים</li>';
+        return;
+      }
+      appendBatch(i);
+    }
+
+    function appendBatch(i) {
+      const st = combos[i];
+      if (st.shown >= st.filtered.length) return;
+      const end = Math.min(st.shown + BATCH, st.filtered.length);
+      const frag = document.createDocumentFragment();
+      for (let k = st.shown; k < end; k++) {
+        const m = st.filtered[k];
+        const li = document.createElement("li");
+        li.className = "combo-item";
+        li.innerHTML = `
+          <span class="r-emoji">${emojiFor(m[3])}</span>
+          <div class="r-body">
+            <div class="r-title">${escapeHtml(m[1])}</div>
+            <div class="r-meta">${m[2] || ""}</div>
+          </div>`;
+        li.addEventListener("click", () => selectMovie(i, m));
+        frag.appendChild(li);
+      }
+      st.list.appendChild(frag);
+      st.shown = end;
+    }
+
+    function selectMovie(i, m) {
+      picks[i] = m;
+      const st = combos[i];
+      st.field.classList.remove("placeholder");
+      st.ftext.textContent = m[1] + (m[2] ? ` (${m[2]})` : "");
+      // add clear button if not present
+      if (!st.root.querySelector(".combo-clear")) {
+        const btn = document.createElement("button");
+        btn.className = "combo-clear"; btn.textContent = "✕"; btn.setAttribute("aria-label", "נקה");
+        btn.addEventListener("click", (e) => { e.stopPropagation(); clearPick(i); });
+        st.field.insertBefore(btn, st.field.querySelector(".caret"));
+      }
+      st.rating.hidden = false;
+      closeAll();
+      updateSubmit();
+    }
+
+    function setScore(i, n) {
+      scores[i] = n;
+      const pills = combos[i].pills.children;
+      for (let k = 0; k < pills.length; k++) {
+        pills[k].classList.toggle("selected", k + 1 === n);
+      }
+      updateSubmit();
+    }
+
+    function clearScore(i) {
+      scores[i] = null;
+      const pills = combos[i].pills.children;
+      for (const p of pills) p.classList.remove("selected");
+    }
+
+    function clearPick(i) {
+      picks[i] = null;
+      const st = combos[i];
+      st.field.classList.add("placeholder");
+      st.ftext.textContent = `בחרו סרט למקום ${i + 1}...`;
+      const btn = st.root.querySelector(".combo-clear");
+      if (btn) btn.remove();
+      st.rating.hidden = true;
+      clearScore(i);
+      updateSubmit();
+    }
+
+    function updateSubmit() {
+      const ready = picks.every((p) => p) && scores.every((s) => s) && $("name").value.trim();
+      $("submit").disabled = !ready;
+      $("submit").textContent = "שליחת הסקר";
+    }
+
+    function toast(msg, kind) {
+      const t = $("toast");
+      t.textContent = msg;
+      t.className = "toast show " + (kind || "");
+      setTimeout(() => { t.className = "toast"; }, 3500);
+    }
+
+    async function submit() {
+      const name = $("name").value.trim();
+      if (!picks.every((p) => p) || !scores.every((s) => s) || !name) return;
+      const btn = $("submit");
+      btn.disabled = true;
+      btn.textContent = "שולח...";
+      const payload = { timestamp: new Date().toISOString(), name };
+      picks.forEach((m, idx) => {
+        payload[`rank${idx + 1}_movie_id`] = m[0];
+        payload[`rank${idx + 1}_title`] = m[1];
+        payload[`rank${idx + 1}_year`] = m[2] || "";
+        payload[`rank${idx + 1}_score`] = scores[idx];
+      });
+      try {
+        const resp = await fetch("/api/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) throw new Error("status " + resp.status);
+        toast("תודה! הסקר נשמר בהצלחה 🎉", "ok");
+        picks.fill(null);
+        $("name").value = "";
+        for (let i = 0; i < 3; i++) clearPick(i);
+      } catch (e) {
+        toast("השמירה נכשלה. נסו שוב.", "err");
+      } finally {
+        updateSubmit();
+      }
+    }
+
+    document.addEventListener("click", (e) => { if (!e.target.closest(".combo")) closeAll(); });
+    $("name").addEventListener("input", updateSubmit);
+    $("submit").addEventListener("click", submit);
+
+    buildSlots();
+    fetch("movies.json")
+      .then((r) => r.json())
+      .then((data) => { MOVIES = data; updateSubmit(); })
+      .catch(() => { $("submit").textContent = "שגיאה בטעינת הסרטים"; });
+  </script>
+</body>
+</html>

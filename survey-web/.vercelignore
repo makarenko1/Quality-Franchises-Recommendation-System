@@ -1,0 +1,6 @@
+# Deploy root is this folder — exclude the files Vercel doesn't need.
+survey.py
+apps_script.gs
+.streamlit/
+README.md
+.env
