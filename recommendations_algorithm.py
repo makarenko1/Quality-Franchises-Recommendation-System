@@ -4,7 +4,7 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import svds
 
-RATINGS_PATH = "datasets/movies-1M/raw/ratings.csv"
+RATINGS_PATH = "dataset_ratings_and_tags.csv"
 DATASET_PATH = "dataset.csv"
 # Use the project dataset as the movie metadata source so evaluation and the
 # interactive recommender consider the same movie universe.
@@ -12,29 +12,37 @@ MOVIES_PATH  = DATASET_PATH
 SVD_K        = 50
 K_VALUES     = [20, 50]  # match evaluate.py; k=50 was best and avoids extra memory
 
-# Dialogue is a weak side signal in the evaluation, so use only the
-# strongest observed dialogue feature and keep its final weight small.
-# Negative weight means a higher negative-word ratio lowers dialogue quality.
+# Dialogue/language is a central project signal.
+# Positive weights reward richer vocabulary; negative weights penalize more
+# negative or repetitive dialogue. Each feature is normalized before combining.
 DIALOGUE_FEATURE_WEIGHTS = {
-    "negative_word_ratio": -1.00,
+    "negative_word_ratio": -0.35,
+    "type_token_ratio": 0.25,
+    "hapax_ratio": 0.15,
+    "repeated_short_phrase_ratio": -0.15,
+    "bigram_repetition_ratio": -0.10,
 }
 
-# Signal weights (must sum to 1.0). Keep the collaborative/quality score
-# dominant; dialogue and franchise are small tie-breakers.
-W_CF        = 0.98
-W_DIALOGUE  = 0.01
-W_FRANCHISE = 0.01
+# Signal weights (must sum to 1.0). Collaborative filtering remains the main
+# recommendation signal, while dialogue/language, franchise quality, and an
+# old-movie penalty provide quality-aware novelty. Genre is used only as a
+# post-filter on the final ranked list, not as a full-candidate scoring term.
+W_CF        = 0.75
+W_DIALOGUE  = 0.15
+W_FRANCHISE = 0.05
+W_YEAR_PENALTY = 0.05
 
-# Inside the CF component, keep a small personalization term and a strong
-# general-quality prior. The general-quality prior now combines popularity and
-# weighted rating, because those are the strongest top-K baselines.
-W_LATENT_SIM = 0.05
-W_ITEM_BIAS  = 0.95
+# Inside the CF component, balance personalization with general item quality.
+# This keeps recommendations relevant while still allowing universally liked
+# movies to appear when they are good matches.
+W_LATENT_SIM = 0.60
+W_ITEM_BIAS  = 0.40
 
 # How to build the general-quality prior that is passed as movie_biases_norm.
-# Popularity is intentionally strong because the evaluation baseline is strong.
-W_QUALITY_POPULARITY = 0.70
-W_QUALITY_RATING     = 0.30
+# Popularity remains useful, but rating quality receives more weight now that
+# the main recommendation score is more personalized.
+W_QUALITY_POPULARITY = 0.60
+W_QUALITY_RATING     = 0.40
 
 
 
@@ -120,13 +128,31 @@ def load_dialogue_features(dataset_path=DATASET_PATH):
         print("  No rows with complete dialogue features; dialogue scores disabled.")
         return {}
 
-    score = sum(w * df[col] for col, w in DIALOGUE_FEATURE_WEIGHTS.items())
-    mn, mx = float(score.min()), float(score.max())
-    if mx > mn:
-        score = (score - mn) / (mx - mn)
-    else:
-        score = pd.Series(0.5, index=score.index)
+    normalized_features = []
+    total_abs_weight = 0.0
 
+    for col, weight in DIALOGUE_FEATURE_WEIGHTS.items():
+        values = df[col].astype(float)
+        mn, mx = float(values.min()), float(values.max())
+
+        if mx > mn:
+            normalized = (values - mn) / (mx - mn)
+        else:
+            normalized = pd.Series(0.5, index=df.index)
+
+        normalized_features.append(weight * normalized)
+        total_abs_weight += abs(float(weight))
+
+    score = sum(normalized_features)
+
+    # Convert the weighted sum back to [0, 1]. This keeps the dialogue score
+    # comparable to the other recommendation components.
+    if total_abs_weight > 0:
+        score = (score + total_abs_weight) / (2 * total_abs_weight)
+    else:
+        score = pd.Series(0.5, index=df.index)
+
+    score = score.clip(0.0, 1.0)
     return dict(zip(df["MovieID"], score.values))
 
 
@@ -140,20 +166,65 @@ def load_svd_model(ratings_path=RATINGS_PATH, k_values=K_VALUES, tune=True):
     [0, 1] for use in the ranking score.
     """
     print("Building biased SVD model from ratings...")
-    if ratings_path.endswith('.csv'):
-        df = pd.read_csv(ratings_path, usecols=['UserID', 'MovieID', 'Rating'],
-                         low_memory=False)
+
+    if not os.path.exists(ratings_path):
+        fallback_paths = [
+            "datasets/movies-1M/movies_ratings_clean.csv",
+            "datasets/movies-1M/movies-ratings-clean.csv",
+        ]
+        for fallback_path in fallback_paths:
+            if os.path.exists(fallback_path):
+                print(f"  {ratings_path} not found; using fallback ratings file: {fallback_path}")
+                ratings_path = fallback_path
+                break
+        else:
+            raise FileNotFoundError(
+                f"No ratings file found. Expected {ratings_path} or one of {fallback_paths}."
+            )
+
+    if str(ratings_path).endswith(".csv"):
+        available_cols = pd.read_csv(ratings_path, nrows=0).columns.tolist()
+
+        if "InteractionType" in available_cols:
+            # Combined dataset_ratings_and_tags.csv. Keep only explicit ratings;
+            # tags are not useful for SVD rating reconstruction.
+            usecols = ["UserID", "MovieID", "Rating", "InteractionType"]
+            if "SourceDataset" in available_cols:
+                usecols.append("SourceDataset")
+
+            df = pd.read_csv(ratings_path, usecols=usecols, low_memory=False)
+            df = df[df["InteractionType"] == "rating"].copy()
+
+            # If 1M and 32M are combined, their user IDs can overlap.
+            # Offset 32M users so they are not treated as the same people.
+            if "SourceDataset" in df.columns:
+                mask_32m = df["SourceDataset"].astype(str).eq("MovieLens 32M")
+                df.loc[mask_32m, "UserID"] = pd.to_numeric(
+                    df.loc[mask_32m, "UserID"],
+                    errors="coerce",
+                ) + 300_000
+                df = df.drop(columns=["SourceDataset"])
+
+            df = df.drop(columns=["InteractionType"])
+        else:
+            # Cleaned MovieLens ratings file.
+            df = pd.read_csv(ratings_path, usecols=["UserID", "MovieID", "Rating"], low_memory=False)
     else:
         ratings = []
         with open(ratings_path) as f:
             for line in f:
-                uid, mid, rating, _ = line.strip().split('::')
+                uid, mid, rating, _ = line.strip().split("::")
                 ratings.append((int(uid), int(mid), float(rating)))
-        df = pd.DataFrame(ratings, columns=['UserID', 'MovieID', 'Rating'])
+        df = pd.DataFrame(ratings, columns=["UserID", "MovieID", "Rating"])
 
-    df['UserID']  = df['UserID'].astype(int)
-    df['MovieID'] = df['MovieID'].astype(int)
-    df['Rating']  = df['Rating'].astype(float)
+    df["UserID"] = pd.to_numeric(df["UserID"], errors="coerce")
+    df["MovieID"] = pd.to_numeric(df["MovieID"], errors="coerce")
+    df["Rating"] = pd.to_numeric(df["Rating"], errors="coerce")
+    df = df.dropna(subset=["UserID", "MovieID", "Rating"]).copy()
+
+    df["UserID"] = df["UserID"].astype(int)
+    df["MovieID"] = df["MovieID"].astype(int)
+    df["Rating"] = df["Rating"].astype(float)
 
     if tune and len(k_values) > 1:
         rng   = np.random.default_rng(42)
@@ -309,6 +380,122 @@ def cosine_sim(a, b):
     return float(np.dot(a, b) / denom) if denom > 0 else 0.0
 
 
+def build_old_movie_penalties(movies):
+    """
+    Return an old-movie penalty by MovieID.
+
+    This corrects IMDb's possible old-movie bias by pushing older movies
+    downward only. New and recent movies do not receive an extra bonus.
+    Missing years are treated neutrally with no penalty.
+    """
+    if "Year" not in movies.columns:
+        return {}
+
+    df = movies[["MovieID", "Year"]].copy()
+    df["MovieID"] = pd.to_numeric(df["MovieID"], errors="coerce")
+    df["Year"] = pd.to_numeric(df["Year"], errors="coerce")
+    df = df.dropna(subset=["MovieID"]).copy()
+
+    valid_years = df["Year"].dropna()
+    if valid_years.empty:
+        return {int(mid): 0.0 for mid in df["MovieID"]}
+
+    old_cutoff = float(valid_years.quantile(0.10))
+    recent_cutoff = float(valid_years.quantile(0.50))
+
+    if recent_cutoff <= old_cutoff:
+        return {int(mid): 0.0 for mid in df["MovieID"]}
+
+    # penalty = 1 for very old movies, fades to 0 by the median year.
+    # Movies newer than the median year get 0, not a bonus.
+    df["old_movie_penalty"] = ((recent_cutoff - df["Year"]) / (recent_cutoff - old_cutoff)).clip(0.0, 1.0)
+    df["old_movie_penalty"] = df["old_movie_penalty"].fillna(0.0)
+
+    return dict(zip(df["MovieID"].astype(int), df["old_movie_penalty"].astype(float)))
+
+
+def get_movie_genres(row):
+    """Return normalized genre set for a metadata row."""
+    genres = set()
+    for i in range(1, 9):
+        col = f"Genre{i}"
+        if col in row.index and pd.notna(row.get(col)):
+            value = str(row.get(col)).strip()
+            if value:
+                genres.add(value.lower())
+    return genres
+
+
+def is_nonstandard_movie_candidate(row):
+    """
+    Identify obvious non-standard movie candidates.
+
+    These items can score well numerically because of recency or dialogue, but
+    they are usually poor survey recommendations for narrative movie inputs.
+    """
+    title = str(row.get("Title", "")).lower()
+
+    blocked_title_terms = [
+        "stand-up",
+        "stand up",
+        "live at",
+        "live in",
+        "live from",
+        "comedy special",
+        "concert",
+    ]
+    if any(term in title for term in blocked_title_terms):
+        return True
+
+    # If IMDb titleType exists in dataset.csv, prefer standard theatrical/movie entries.
+    title_type_col = next((c for c in ("titleType", "TitleType", "imdb_titleType") if c in row.index), None)
+    if title_type_col is not None and pd.notna(row.get(title_type_col)):
+        title_type = str(row.get(title_type_col)).strip().lower()
+        if title_type != "movie":
+            return True
+
+    genres = get_movie_genres(row)
+    blocked_genres = {
+        "documentary",
+        "short",
+        "talk-show",
+        "reality-tv",
+        "news",
+        "game-show",
+    }
+    return bool(genres & blocked_genres)
+
+
+def passes_final_genre_filter(candidate_id, input_ids, movie_rows):
+    """
+    Lightweight post-filter used only after ranking.
+
+    The model first ranks candidates normally. Then this function removes
+    candidates that look unsuitable for the user's selected movies. This is much
+    faster than calculating genre similarity for every candidate.
+    """
+    if candidate_id not in movie_rows.index:
+        return False
+
+    candidate_row = movie_rows.loc[candidate_id]
+    if is_nonstandard_movie_candidate(candidate_row):
+        return False
+
+    input_genres = set()
+    for input_id in input_ids:
+        if input_id in movie_rows.index:
+            input_genres.update(get_movie_genres(movie_rows.loc[input_id]))
+
+    candidate_genres = get_movie_genres(candidate_row)
+
+    # If genre metadata is missing, do not over-filter.
+    if not input_genres or not candidate_genres:
+        return True
+
+    # Reject only clear genre mismatches. This avoids stand-up/comedy-only picks
+    # for drama/adventure/sci-fi inputs, while keeping the main ranking unchanged.
+    return bool(input_genres & candidate_genres)
+
 def resolve_input_ids(input_titles, movies, mid_to_idx):
     """Resolve typed movie titles to MovieIDs with exact match first, contains second."""
     title_lower = movies["Title"].astype(str).str.lower()
@@ -406,6 +593,7 @@ def _recommend_scored_candidates(
 
     user_profile = np.mean([movie_factors[mid_to_idx[mid]] for mid in clean_input_ids], axis=0)
     user_dq = float(np.mean([dq_map.get(mid, 0.5) for mid in clean_input_ids]))
+    old_movie_penalties = build_old_movie_penalties(movies)
 
     # Vectorized latent similarity for all movies. This is faster than calling
     # cosine_sim for every candidate inside the loop.
@@ -427,18 +615,38 @@ def _recommend_scored_candidates(
         # movie-quality prior from item bias.
         cf_score = W_LATENT_SIM * float(latent_scores[i]) + W_ITEM_BIAS * float(movie_biases_norm[i])
 
-        # Dialogue quality is a weak tie-breaker, not a dominant signal.
+        # Dialogue/language quality is a meaningful side signal.
         movie_dq = float(dq_map.get(mid, 0.5))
         dq_score = 1.0 - abs(movie_dq - user_dq)
 
         # Franchise awareness uses IMDb/installment metadata when available.
         franchise_score = franchise_signal(mid, clean_input_ids, franchise_map)
 
-        score = W_CF * cf_score + W_DIALOGUE * dq_score + W_FRANCHISE * franchise_score
-        candidates.append((mid, score, cf_score, dq_score, franchise_score))
+        # Old-movie correction: old movies are pushed downward, while newer movies
+        # receive no extra bonus.
+        old_movie_penalty = float(old_movie_penalties.get(mid, 0.0))
+
+        score = (
+            W_CF * cf_score
+            + W_DIALOGUE * dq_score
+            + W_FRANCHISE * franchise_score
+            - W_YEAR_PENALTY * old_movie_penalty
+        )
+        candidates.append((mid, score, cf_score, dq_score, franchise_score, old_movie_penalty))
 
     candidates.sort(key=lambda x: x[1], reverse=True)
-    return candidates[:n]
+
+    # Post-filter only the ranked list. If a top candidate is unsuitable, replace
+    # it with the next lower-ranked suitable candidate.
+    filtered = []
+    for candidate in candidates:
+        mid = int(candidate[0])
+        if passes_final_genre_filter(mid, clean_input_ids, movie_rows):
+            filtered.append(candidate)
+            if len(filtered) >= n:
+                break
+
+    return filtered
 
 
 def recommend_from_movie_ids(
@@ -501,7 +709,7 @@ def recommend(
     )
 
     results = []
-    for mid, score, cf, dq, fs in candidates:
+    for mid, score, cf, dq, fs, yp in candidates:
         row = movie_rows.loc[mid]
         genres = [row[f"Genre{i}"] for i in range(1, 9) if pd.notna(row.get(f"Genre{i}"))]
         franchise_note = ""
@@ -517,6 +725,7 @@ def recommend(
             "cf":        round(cf, 3),
             "dq":        round(dq, 3),
             "franchise": round(fs, 3),
+            "old_movie_penalty": round(yp, 3),
             "note":      franchise_note,
         })
     return results
@@ -547,7 +756,9 @@ def main():
                 print(f"\n  {rank}. {r['title']} ({r['year']}){r['note']}")
                 print(f"     Genres:  {r['genres']}")
                 print(f"     Score:   {r['score']}  "
-                      f"(CF: {r['cf']} | Dialogue: {r['dq']} | Franchise: {r['franchise']})")
+                      f"(CF: {r['cf']} | Dialogue: {r['dq']} | "
+                      f"Franchise: {r['franchise']} | "
+                      f"Old penalty: {r['old_movie_penalty']})")
 
         again = input("\nTry again? (y/n): ").strip().lower()
         if again != 'y':
