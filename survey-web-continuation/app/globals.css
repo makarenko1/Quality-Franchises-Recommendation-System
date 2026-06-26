@@ -1,0 +1,153 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: #115e59;
+}
+
+.container {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 18px 60px;
+}
+
+.hero {
+  background: linear-gradient(135deg, #0f766e, #115e59);
+  color: white;
+  border-radius: 20px;
+  padding: 30px;
+  margin-bottom: 20px;
+}
+
+.hero h1 {
+  margin: 0 0 8px;
+  font-size: 30px;
+}
+
+.card {
+  background: white;
+  border: 1px solid #dbe4ea;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
+label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+input, select, textarea, button {
+  font: inherit;
+}
+
+input, select, textarea {
+  border: 1px solid #dbe4ea;
+  border-radius: 10px;
+  padding: 10px;
+  background: white;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  background: #0f766e;
+  color: white;
+  padding: 11px 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.error {
+  color: #b91c1c;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.success {
+  color: #115e59;
+  font-weight: 700;
+}
+
+.inputMovies {
+  padding: 12px;
+  background: #ecfeff;
+  border: 1px solid #99f6e4;
+  border-radius: 12px;
+  margin-top: 8px;
+}
+
+.group {
+  border-left: 6px solid #0f766e;
+}
+
+.movie {
+  border-top: 1px solid #dbe4ea;
+  padding-top: 14px;
+  margin-top: 14px;
+}
+
+.movieTitle {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.rankGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rankGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+textarea {
+  width: 100%;
+  min-height: 90px;
+}
+
+.identity {
+  background: #f1f5f9;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-top: 10px;
+}
