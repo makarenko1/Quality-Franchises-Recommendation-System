@@ -4,6 +4,7 @@ from recommendations_algorithm import (
     load_dialogue_features,
     load_svd_model,
     load_franchise_map,
+    load_installment_rating_trend,
     load_movies_metadata,
     recommend,
 )
@@ -192,7 +193,8 @@ def load_models():
     dq_map = load_dialogue_features("dataset.csv")
     movie_ids, movie_factors, movie_quality_scores = load_svd_model()
     franchise_map = load_franchise_map("dataset.csv")
-    return movies, dq_map, movie_ids, movie_factors, movie_quality_scores, franchise_map
+    installment_trend = load_installment_rating_trend("dataset.csv")
+    return movies, dq_map, movie_ids, movie_factors, movie_quality_scores, franchise_map, installment_trend
 
 
 
@@ -222,7 +224,7 @@ def movie_card_html(row, badge=None):
 # Use all movies from dataset.csv in the UI. Some metadata-only movies may not
 # have rating factors; those movies can still be searched/previewed, but they
 # cannot influence the SVD component of the recommender.
-movies_model, dq_map, movie_ids, movie_factors, movie_quality_scores, franchise_map = load_models()
+movies_model, dq_map, movie_ids, movie_factors, movie_quality_scores, franchise_map, installment_trend = load_models()
 movies_df = load_movies()
 available_movie_ids = set(int(mid) for mid in movie_ids)
 movies_df = movies_df.reset_index(drop=True)
@@ -307,7 +309,8 @@ if st.session_state.get("last_selections") != selections:
     if len(selections) == 3:
         results = recommend(
             selections, movies_model, movie_ids,
-            movie_factors, movie_quality_scores, dq_map, franchise_map, n=3
+            movie_factors, movie_quality_scores, dq_map, franchise_map,
+            installment_trend, n=3
         )
         rec_titles = [r["title"] for r in results]
         ordered_rows = []

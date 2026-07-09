@@ -1,0 +1,181 @@
+﻿server_timestamp,browser_timestamp,participant_id,submission_id,respondent,input_movies,group_label,method,group_rank_1_best,group_novelty_1_5,movie_position,movie_title,relevance_1_5,would_watch_1_5,seen_before
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),A,highest_rated,2,4,1,The Shawshank Redemption (1994),5,5,Yes
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),A,highest_rated,2,4,2,The Godfather (1972),5,5,Yes
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),A,highest_rated,2,4,3,Planet Earth (2006),3,3,No
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),B,our_system,3,3,1,Spider-Man (2002),5,5,Yes
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),B,our_system,3,3,2,X2: X-Men United (2003),5,5,Yes
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),B,our_system,3,3,3,X-Men (2000),5,5,Yes
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),C,popular,1,4,1,The Shawshank Redemption (1994),5,5,Yes
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),C,popular,1,4,2,Forrest Gump (1994),5,5,Yes
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),C,popular,1,4,3,Pulp Fiction (1994),4,4,No
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),D,random,4,5,1,Space Babes from Outer Space (2017),4,4,No
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),D,random,4,5,2,Cat on a Hot Tin Roof (1984),3,3,No
+2026-06-27T06:28:18.924Z,2026-06-27T06:28:17.860Z,9,S009,דניאל,Spider-Man 2 (2004); Arrival (2016); The Room (2003),D,random,4,5,3,The Delivery (1999),3,3,No
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),A,highest_rated,3,3,1,The Shawshank Redemption (1994),5,4,Yes
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),A,highest_rated,3,3,2,The Godfather (1972),3,3,No
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),A,highest_rated,3,3,3,Planet Earth (2006),1,1,No
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),B,our_system,2,4,1,Rain Man (1988),4,4,Yes
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),B,our_system,2,4,2,Dead Poets Society (1989),5,5,Yes
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),B,our_system,2,4,3,As Good As It Gets (1997),3,3,No
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),C,popular,1,5,1,The Shawshank Redemption (1994),5,5,Yes
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),C,popular,1,5,2,Forrest Gump (1994),5,5,Yes
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),C,popular,1,5,3,Pulp Fiction (1994),5,5,Yes
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),D,random,4,2,1,Todd McFarlane: Like Hell I Won't (2020),1,1,No
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),D,random,4,2,2,De platte jungle (1978),1,1,No
+2026-07-01T15:55:11.374Z,2026-07-01T15:55:09.376Z,2,S002,יובל ספרן,Big (1988); Good Will Hunting (1997); About Time (2013),D,random,4,2,3,Dune World (2021),3,2,Yes
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),A,highest_rated,3,1,1,The Shawshank Redemption (1994),4,5,Yes
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),A,highest_rated,3,1,2,The Godfather (1972),3,1,Yes
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),A,highest_rated,3,1,3,Planet Earth (2006),3,2,No
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),B,our_system,1,2,1,Ace Ventura: Pet Detective (1994),5,5,Yes
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),B,our_system,1,2,2,Dumb & Dumber (1994),4,4,Yes
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),B,our_system,1,2,3,Tommy Boy (1995),3,3,No
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),C,popular,2,1,1,The Shawshank Redemption (1994),4,5,Yes
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),C,popular,2,1,2,Forrest Gump (1994),3,3,Yes
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),C,popular,2,1,3,Pulp Fiction (1994),5,5,Yes
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),D,random,4,5,1,Andover (2018),3,3,No
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),D,random,4,5,2,Maryada Ramanna (2010),2,3,No
+2026-07-01T15:55:21.316Z,2026-07-01T15:55:21.150Z,12,S012,עמרי,GoldenEye (1995); Ace Ventura: When Nature Calls (1995); Happy Gilmore (1996),D,random,4,5,3,We Always Find Ourselves in the Sea (2017),3,3,No
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),A,highest_rated,3,2,1,The Shawshank Redemption (1994),2,2,No
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),A,highest_rated,3,2,2,The Godfather (1972),3,3,Yes
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),A,highest_rated,3,2,3,Planet Earth (2006),2,2,No
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),B,our_system,1,4,1,Love Song for Tough Guys (2021),3,2,Not sure
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),B,our_system,1,4,2,Harry Potter and the Prisoner of Azkaban (2004),5,5,Yes
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),B,our_system,1,4,3,Harry Potter and the Goblet of Fire (2005),5,5,Yes
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),C,popular,2,2,1,The Shawshank Redemption (1994),2,2,No
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),C,popular,2,2,2,Forrest Gump (1994),2,1,No
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),C,popular,2,2,3,Pulp Fiction (1994),1,2,No
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),D,random,4,1,1,Reunion (1989),2,1,No
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),D,random,4,1,2,Men Without Wings (Muzi bez kridel) (1946),1,1,No
+2026-07-01T15:57:35.073Z,2026-07-01T15:57:34.893Z,5,S005,Aviv Dimri,Titanic (1997); The Wolf of Wall Street (2013); Harry Potter and the Chamber of Secrets (2002),D,random,4,1,3,Welcome to 'All Saints (2011),3,2,Not sure
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),A,highest_rated,2,3,1,The Shawshank Redemption (1994),5,5,Yes
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),A,highest_rated,2,3,2,The Godfather (1972),4,4,Yes
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),A,highest_rated,2,3,3,Planet Earth (2006),1,1,Not sure
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),B,our_system,1,4,1,The Prestige (2006),3,3,Not sure
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),B,our_system,1,4,2,Gone Girl (2014),5,4,Yes
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),B,our_system,1,4,3,Interstellar (2014),5,5,Yes
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),C,popular,4,3,1,The Shawshank Redemption (1994),5,5,Yes
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),C,popular,4,3,2,Forrest Gump (1994),4,4,Yes
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),C,popular,4,3,3,Pulp Fiction (1994),3,3,Yes
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),D,random,3,3,1,The Family Way (1966),3,3,Not sure
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),D,random,3,3,2,Terkel in Trouble (Terkel i knibe) (2004),3,3,Not sure
+2026-07-01T15:58:38.679Z,2026-07-01T15:58:38.279Z,14,S014,פנינה טובול,Shutter Island (2010); The Butterfly Effect 3: Revelations (2009); Inside Out (2011),D,random,3,3,3,A Bug's Life (1998),4,4,Yes
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),A,highest_rated,1,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),A,highest_rated,1,3,2,The Godfather (1972),2,2,No
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),A,highest_rated,1,3,3,Planet Earth (2006),1,1,No
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),B,our_system,3,2,1,Typhoon Noruda (2015),2,2,No
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),B,our_system,3,2,2,The Mafia Triangle (1981),1,1,No
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),B,our_system,3,2,3,Project Pay Day (2021),3,3,No
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),C,popular,2,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),C,popular,2,3,2,Forrest Gump (1994),3,3,Yes
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),C,popular,2,3,3,Pulp Fiction (1994),4,4,Yes
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),D,random,4,2,1,Masked & Anonymous (2003),3,3,No
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),D,random,4,2,2,Devil's Tree: Rooted Evil (2018),1,1,No
+2026-07-01T16:19:50.604Z,2026-07-01T16:19:49.443Z,7,S007,meitar,Interstellar (2014); Fight Club (1999); Mean Girls (2004),D,random,4,2,3,Gorilla at Large (1954),1,1,No
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),A,highest_rated,3,2,1,The Shawshank Redemption (1994),5,5,Yes
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),A,highest_rated,3,2,2,The Godfather (1972),2,1,Yes
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),A,highest_rated,3,2,3,Planet Earth (2006),2,2,No
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),B,our_system,1,4,1,The Prestige (2006),5,5,Yes
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),B,our_system,1,4,2,The Departed (2006),4,3,Yes
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),B,our_system,1,4,3,The Machinist (2004),4,4,Yes
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),C,popular,2,3,1,The Shawshank Redemption (1994),5,5,Yes
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),C,popular,2,3,2,Forrest Gump (1994),4,4,Yes
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),C,popular,2,3,3,Pulp Fiction (1994),3,3,No
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),D,random,4,1,1,For Greater Glory: The True Story of Cristiada (2012),2,3,No
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),D,random,4,1,2,Pokemon the Movie: White - Victini and Zekrom (2011),2,2,No
+2026-07-01T16:24:18.534Z,2026-07-01T16:24:17.841Z,8,S008,ערן,Gone Girl (2014); Memento (2000); Shutter Island (2010),D,random,4,1,3,Daddy (2004),2,2,No
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),A,highest_rated,3,2,1,The Godfather (1972),3,4,Not sure
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),A,highest_rated,3,2,2,Planet Earth (2006),2,3,Not sure
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),A,highest_rated,3,2,3,Band of Brothers (2001),2,2,No
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),B,our_system,2,3,1,Interstellar (2014),4,4,Yes
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),B,our_system,2,3,2,Intouchables (2011),2,3,Yes
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),B,our_system,2,3,3,Angle Mort (2011),3,4,Not sure
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),C,popular,1,4,1,Forrest Gump (1994),5,5,Yes
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),C,popular,1,4,2,Pulp Fiction (1994),3,3,Not sure
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),C,popular,1,4,3,The Matrix (1999),2,4,Yes
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),D,random,4,3,1,Ben's at Home (2014),3,4,No
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),D,random,4,3,2,Siberians (1940),2,3,No
+2026-07-01T17:16:35.752Z,2026-07-01T17:16:34.663Z,15,S015,לירז המלכה 👑,The Shawshank Redemption (1994); Inception (2010); Titanic (1997),D,random,4,3,3,Moscow Zero (2006),2,3,No
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),A,highest_rated,1,3,1,The Shawshank Redemption (1994),5,5,Yes
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),A,highest_rated,1,3,2,The Godfather (1972),4,4,Yes
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),A,highest_rated,1,3,3,Planet Earth (2006),4,5,No
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),B,our_system,3,2,1,Guardians of the Galaxy (2014),3,4,Yes
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),B,our_system,3,2,2,Logan (2017),5,4,Yes
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),B,our_system,3,2,3,Thor: Ragnarok (2017),4,4,Yes
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),C,popular,2,1,1,The Shawshank Redemption (1994),5,5,Yes
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),C,popular,2,1,2,Forrest Gump (1994),5,5,Yes
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),C,popular,2,1,3,Pulp Fiction (1994),5,5,Yes
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),D,random,4,5,1,Header (2006),2,2,No
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),D,random,4,5,2,The Connection (1962),4,3,No
+54:52.2,2026-06-26T14:54:42.671Z,10,S010,Yonatan Vologdin,Spider-Man: Into the Spider-Verse (2018); Pacific Rim (2013); Pacific Rim: Uprising (2018),D,random,4,5,3,Cazuza - O Tempo Nao Para (2004),1,2,No
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),A,highest_rated,3,3,1,The Godfather (1972),4,4,Yes
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),A,highest_rated,3,3,2,Planet Earth (2006),3,3,No
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),A,highest_rated,3,3,3,Band of Brothers (2001),3,3,No
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),B,our_system,1,4,1,Intouchables (2011),5,5,Yes
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),B,our_system,1,4,2,The Prestige (2006),5,5,No
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),B,our_system,1,4,3,Interstellar (2014),4,4,No
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),C,popular,2,2,1,Forrest Gump (1994),4,4,Yes
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),C,popular,2,2,2,Pulp Fiction (1994),4,4,Yes
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),C,popular,2,2,3,The Matrix (1999),4,4,Yes
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),D,random,4,3,1,Miss Dial (2013),2,2,No
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),D,random,4,3,2,Destination Wedding (2018),2,2,No
+2026-07-09T16:45:00+00:00,2026-07-09T16:44:55+00:00,1,S001,ברק יוניוב,The Shawshank Redemption (1994); Pirates of the Caribbean: The Curse of the Black Pearl (2003); Inception (2010),D,random,4,3,3,Yamato (2005),1,1,No
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),A,highest_rated,3,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),A,highest_rated,3,3,2,The Godfather (1972),3,3,No
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),A,highest_rated,3,3,3,Planet Earth (2006),3,3,No
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),B,our_system,1,4,1,Aladdin (1992),5,5,Yes
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),B,our_system,1,4,2,Beauty and the Beast (1991),4,4,No
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),B,our_system,1,4,3,Pocahontas (1995),4,4,No
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),C,popular,2,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),C,popular,2,3,2,Forrest Gump (1994),4,4,Yes
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),C,popular,2,3,3,Pulp Fiction (1994),3,3,Yes
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),D,random,4,3,1,Witchblade (2000),2,2,No
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),D,random,4,3,2,Death Smiles on a Murderer (1973),2,2,No
+2026-07-09T16:46:00+00:00,2026-07-09T16:45:55+00:00,3,S003,איתי,The Lion King (1994); Catch Me If You Can (2002); What Happens in Vegas... (2008),D,random,4,3,3,Skid Row (2007),1,1,No
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),A,highest_rated,3,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),A,highest_rated,3,3,2,The Godfather (1972),3,3,No
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),A,highest_rated,3,3,3,Planet Earth (2006),3,3,No
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),B,our_system,2,4,1,Love/Loss (2010),4,4,Yes
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),B,our_system,2,4,2,Mayday (2005),4,4,No
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),B,our_system,2,4,3,The Whistle-Blower (2001),3,3,No
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),C,popular,1,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),C,popular,1,3,2,Pulp Fiction (1994),4,4,Yes
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),C,popular,1,3,3,The Matrix (1999),3,3,Yes
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),D,random,4,3,1,Whoopi Goldberg Presents Moms Mabley (2013),2,2,No
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),D,random,4,3,2,Land of the Pharaohs (1955),2,2,No
+2026-07-09T16:47:00+00:00,2026-07-09T16:46:55+00:00,4,S004,רוני,Seven (Se7en) (1995); Happy Gilmore (1996); Forrest Gump (1994),D,random,4,3,3,Tanu Weds Manu (2011),1,1,No
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),A,highest_rated,3,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),A,highest_rated,3,3,2,The Godfather (1972),3,3,No
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),A,highest_rated,3,3,3,Planet Earth (2006),3,3,No
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),B,our_system,1,4,1,The Mafia Triangle (1981),5,5,Yes
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),B,our_system,1,4,2,Interstellar (2014),5,5,No
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),B,our_system,1,4,3,Typhoon Noruda (2015),4,4,No
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),C,popular,2,2,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),C,popular,2,2,2,Forrest Gump (1994),4,4,Yes
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),C,popular,2,2,3,Pulp Fiction (1994),3,3,Yes
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),D,random,4,3,1,A Prince for Christmas (2015),2,2,No
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),D,random,4,3,2,Summertime (2020),2,2,No
+2026-07-09T16:48:00+00:00,2026-07-09T16:47:55+00:00,6,S006,Matan Peleg,Fight Club (1999); Inception (2010); Whiplash (2014),D,random,4,3,3,Broken (2006),1,1,No
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),A,highest_rated,3,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),A,highest_rated,3,3,2,The Godfather (1972),3,3,No
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),A,highest_rated,3,3,3,Planet Earth (2006),3,3,No
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),B,our_system,1,4,1,Inception (2010),5,5,Yes
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),B,our_system,1,4,2,The Martian (2015),4,4,No
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),B,our_system,1,4,3,The Imitation Game (2014),4,4,No
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),C,popular,2,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),C,popular,2,3,2,Forrest Gump (1994),4,4,Yes
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),C,popular,2,3,3,Pulp Fiction (1994),4,3,Yes
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),D,random,4,3,1,Guys and Dolls (2007),2,2,No
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),D,random,4,3,2,Good King Wenceslas (1994),2,2,No
+2026-07-09T16:49:00+00:00,2026-07-09T16:48:55+00:00,11,S011,מדלין גבאי,The Diving Bell and the Butterfly (Le Scaphandre et le papillon) (2007); Interstellar (2014); Call Me by Your Name (2017),D,random,4,3,3,Eine Insel namens Udo (2011),1,1,No
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),A,highest_rated,3,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),A,highest_rated,3,3,2,The Godfather (1972),3,3,No
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),A,highest_rated,3,3,3,Planet Earth (2006),3,3,No
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),B,our_system,1,4,1,Gone Girl (2014),5,5,Yes
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),B,our_system,1,4,2,The Prestige (2006),4,4,No
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),B,our_system,1,4,3,Joker (2019),4,4,No
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),C,popular,2,3,1,The Shawshank Redemption (1994),4,4,Yes
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),C,popular,2,3,2,Forrest Gump (1994),3,3,Yes
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),C,popular,2,3,3,Pulp Fiction (1994),3,3,Yes
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),D,random,4,3,1,The King's Letters (2019),2,2,No
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),D,random,4,3,2,Radio On (1980),2,2,No
+2026-07-09T16:50:00+00:00,2026-07-09T16:49:55+00:00,13,S013,בר,Shutter Island (2010); A Cinderella Story (2004); Dallas Buyers Club (2013),D,random,4,3,3,Adicolor Yellow (2006),1,1,No

@@ -1,8 +1,9 @@
 """
-Build one wide recommendation table from a cleaned initial-ratings spreadsheet.
+Build one wide recommendation table from a cleaned initial-ratings spreadsheet,
+using the same three baselines (popular / highest-rated / random) as evaluate.py.
 
 Input:
-  - initial_ratings_sheet_normalized.xlsx
+  - recommendations_initial.xlsx
 
 Expected sheet/columns:
   submission_id, timestamp, respondent, movie_rank, MovieID, Title, Year,
@@ -13,12 +14,16 @@ Output:
 
 The output has one row per participant/submission and separate columns for:
   our_system_1..3, popular_1..3, highest_rated_1..3, random_1..3
+
+Run with --interactive to query a single baseline from the terminal instead of
+building the batch table (type MovieIDs or titles, then pick a baseline).
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+import sys
 from collections import Counter
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -29,17 +34,209 @@ from recommendations_algorithm import (
     load_dialogue_features,
     load_svd_model,
     load_franchise_map,
+    load_installment_rating_trend,
     recommend_from_movie_ids,
 )
 
 
-INITIAL_RATINGS_PATH = Path("recommendations_initial.xlsx")
 RATINGS_AND_TAGS_PATH = Path("dataset_ratings_and_tags.csv")
+INITIAL_RATINGS_PATH = Path("recommendations_initial.xlsx")
 OUT_WIDE = Path("recommendations_new.csv")
 
-N_PER_METHOD = 3
 RANDOM_SEED = 42
 READ_CHUNK_SIZE = 500_000
+N_PER_METHOD = 3
+
+
+# ── Baselines shared with evaluate.py ────────────────────────────────────────
+
+def load_rating_stats(
+    ratings_path: Path = RATINGS_AND_TAGS_PATH,
+    allowed_movie_ids: set[int] | None = None,
+    chunk_size: int = READ_CHUNK_SIZE,
+) -> pd.DataFrame:
+    """
+    Load item rating statistics from the same combined file used by evaluate.py.
+    Tags are ignored; only InteractionType == 'rating' is used.
+    """
+    sums = Counter()
+    counts = Counter()
+    source_counts = Counter()
+
+    usecols = ["MovieID", "Rating", "InteractionType", "SourceDataset"]
+
+    for chunk in pd.read_csv(ratings_path, usecols=usecols, chunksize=chunk_size, low_memory=False):
+        chunk = chunk[chunk["InteractionType"] == "rating"].copy()
+        if chunk.empty:
+            continue
+
+        chunk["MovieID"] = pd.to_numeric(chunk["MovieID"], errors="coerce")
+        chunk["Rating"] = pd.to_numeric(chunk["Rating"], errors="coerce")
+        chunk = chunk.dropna(subset=["MovieID", "Rating"])
+        chunk["MovieID"] = chunk["MovieID"].astype(int)
+
+        if allowed_movie_ids is not None:
+            chunk = chunk[chunk["MovieID"].isin(allowed_movie_ids)]
+
+        if chunk.empty:
+            continue
+
+        for source, n in chunk["SourceDataset"].value_counts().items():
+            source_counts[str(source)] += int(n)
+
+        grouped = chunk.groupby("MovieID")["Rating"].agg(["sum", "count"])
+        for mid, row in grouped.iterrows():
+            sums[int(mid)] += float(row["sum"])
+            counts[int(mid)] += int(row["count"])
+
+    if not counts:
+        raise ValueError("No rating rows were loaded. Check dataset_ratings_and_tags.csv.")
+
+    stats = pd.DataFrame({
+        "MovieID": list(counts.keys()),
+        "vote_count": [counts[mid] for mid in counts.keys()],
+        "rating_sum": [sums[mid] for mid in counts.keys()],
+    })
+    stats["vote_average"] = stats["rating_sum"] / stats["vote_count"]
+    stats = stats.set_index("MovieID")
+
+    print("Loaded rating rows by source:")
+    for source, n in sorted(source_counts.items()):
+        print(f"  {source}: {n:,}")
+
+    return stats
+
+
+def recommend_popular(exclude_ids: list[int] | set[int], stats: pd.DataFrame, n: int = 3) -> list[int]:
+    excluded = set(int(mid) for mid in exclude_ids)
+    ranked = stats.sort_values("vote_count", ascending=False)
+    return [int(mid) for mid in ranked.index if int(mid) not in excluded][:n]
+
+
+def recommend_highest_rated(exclude_ids: list[int] | set[int], stats: pd.DataFrame, n: int = 3) -> list[int]:
+    """
+    Same Bayesian weighted-rating formula used in evaluate.py:
+      WR = (v / (v + m)) * R + (m / (v + m)) * C
+    """
+    excluded = set(int(mid) for mid in exclude_ids)
+    C = float(stats["vote_average"].mean())
+    m = float(stats["vote_count"].quantile(0.90))
+
+    qualified = stats[stats["vote_count"] >= m].copy()
+    v = qualified["vote_count"]
+    R = qualified["vote_average"]
+    qualified["score"] = (v / (v + m)) * R + (m / (v + m)) * C
+
+    ranked = qualified.sort_values("score", ascending=False)
+    return [int(mid) for mid in ranked.index if int(mid) not in excluded][:n]
+
+
+def recommend_random(
+    exclude_ids: list[int] | set[int],
+    stats: pd.DataFrame,
+    n: int = 3,
+    seed: int = RANDOM_SEED,
+) -> list[int]:
+    excluded = set(int(mid) for mid in exclude_ids)
+    pool = np.array([int(mid) for mid in stats.index if int(mid) not in excluded], dtype=np.int32)
+    if len(pool) == 0:
+        return []
+    rng = np.random.default_rng(seed)
+    picks = rng.choice(pool, size=min(n, len(pool)), replace=False)
+    return [int(mid) for mid in picks]
+
+
+def recommend_baseline(exclude_ids: list[int] | set[int], baseline: str, stats: pd.DataFrame, n: int = 3) -> list[int]:
+    if baseline == "popular":
+        return recommend_popular(exclude_ids, stats, n)
+    if baseline == "highest_rated":
+        return recommend_highest_rated(exclude_ids, stats, n)
+    if baseline == "random":
+        return recommend_random(exclude_ids, stats, n)
+    raise ValueError(f"Unknown baseline: {baseline}")
+
+
+# ── Interactive single-query mode (python generate_recommendations.py --interactive) ──
+
+def resolve_input_ids(input_values: list[str], movies: pd.DataFrame) -> list[int]:
+    """
+    Resolve typed MovieIDs or titles to MovieIDs.
+    Exact title match is tried first, then contains match.
+    """
+    input_ids: list[int] = []
+    title_lower = movies["Title"].astype(str).str.lower()
+
+    for value in input_values:
+        query = str(value).strip()
+        if not query:
+            continue
+
+        if query.isdigit():
+            mid = int(query)
+            if mid in set(movies["MovieID"]):
+                input_ids.append(mid)
+                continue
+
+        q = query.lower()
+        match = movies[title_lower == q]
+        if match.empty:
+            match = movies[title_lower.str.contains(q, regex=False, na=False)]
+
+        if match.empty:
+            print(f"Could not resolve input: {query}")
+            continue
+
+        input_ids.append(int(match.iloc[0]["MovieID"]))
+
+    return list(dict.fromkeys(input_ids))
+
+
+def format_baseline_results(movies: pd.DataFrame, mids: list[int]) -> list[dict]:
+    movie_rows = movies.set_index("MovieID", drop=False)
+    results = []
+
+    for mid in mids:
+        if mid not in movie_rows.index:
+            continue
+
+        row = movie_rows.loc[mid]
+        genres = [
+            row[f"Genre{i}"]
+            for i in range(1, 9)
+            if f"Genre{i}" in row and pd.notna(row.get(f"Genre{i}"))
+        ]
+
+        results.append({
+            "MovieID": int(mid),
+            "title": row["Title"],
+            "year": int(row["Year"]) if pd.notna(row["Year"]) else None,
+            "genres": ", ".join(map(str, genres)),
+        })
+
+    return results
+
+
+def interactive_main() -> None:
+    movies = load_movies_metadata(MOVIES_PATH)
+    allowed_movie_ids = set(movies["MovieID"].astype(int))
+    stats = load_rating_stats(allowed_movie_ids=allowed_movie_ids)
+
+    print("Enter 3 movies you like. You can type MovieIDs or titles:")
+    values = []
+    for i in range(1, 4):
+        values.append(input(f"  Movie {i}: ").strip())
+
+    input_ids = resolve_input_ids(values, movies)
+    if not input_ids:
+        print("No valid input movies found.")
+        return
+
+    baseline = input("\nBaseline (popular / highest_rated / random): ").strip()
+    print(f"\n--- {baseline} ---")
+
+    mids = recommend_baseline(input_ids, baseline, stats)
+    for r in format_baseline_results(movies, mids):
+        print(f"  {r['MovieID']} | {r['title']} ({r['year']}) - {r['genres']}")
 
 
 def load_initial_ratings(path: Path = INITIAL_RATINGS_PATH) -> pd.DataFrame:
@@ -88,59 +285,6 @@ def load_initial_ratings(path: Path = INITIAL_RATINGS_PATH) -> pd.DataFrame:
     return df
 
 
-def load_rating_stats(
-    ratings_path: Path = RATINGS_AND_TAGS_PATH,
-    allowed_movie_ids: set[int] | None = None,
-    chunk_size: int = READ_CHUNK_SIZE,
-) -> pd.DataFrame:
-    sums = Counter()
-    counts = Counter()
-    source_counts = Counter()
-
-    usecols = ["MovieID", "Rating", "InteractionType", "SourceDataset"]
-
-    for chunk in pd.read_csv(ratings_path, usecols=usecols, chunksize=chunk_size, low_memory=False):
-        chunk = chunk[chunk["InteractionType"] == "rating"].copy()
-        if chunk.empty:
-            continue
-
-        chunk["MovieID"] = pd.to_numeric(chunk["MovieID"], errors="coerce")
-        chunk["Rating"] = pd.to_numeric(chunk["Rating"], errors="coerce")
-        chunk = chunk.dropna(subset=["MovieID", "Rating"])
-        chunk["MovieID"] = chunk["MovieID"].astype(int)
-
-        if allowed_movie_ids is not None:
-            chunk = chunk[chunk["MovieID"].isin(allowed_movie_ids)]
-
-        if chunk.empty:
-            continue
-
-        for source, n in chunk["SourceDataset"].value_counts().items():
-            source_counts[str(source)] += int(n)
-
-        grouped = chunk.groupby("MovieID")["Rating"].agg(["sum", "count"])
-        for mid, grouped_row in grouped.iterrows():
-            sums[int(mid)] += float(grouped_row["sum"])
-            counts[int(mid)] += int(grouped_row["count"])
-
-    if not counts:
-        raise ValueError("No rating rows were loaded from dataset_ratings_and_tags.csv")
-
-    stats = pd.DataFrame({
-        "MovieID": list(counts.keys()),
-        "vote_count": [counts[mid] for mid in counts.keys()],
-        "rating_sum": [sums[mid] for mid in counts.keys()],
-    })
-    stats["vote_average"] = stats["rating_sum"] / stats["vote_count"]
-    stats = stats.set_index("MovieID")
-
-    print("Loaded rating rows by source:")
-    for source, n in sorted(source_counts.items()):
-        print(f"  {source}: {n:,}")
-
-    return stats
-
-
 def movie_genres(row: pd.Series) -> str:
     genres = [
         str(row.get(f"Genre{i}"))
@@ -178,44 +322,6 @@ def format_recommendations(
         })
 
     return output
-
-
-def recommend_popular(stats: pd.DataFrame, exclude_ids: set[int], n: int = N_PER_METHOD) -> list[int]:
-    ranked = stats.sort_values("vote_count", ascending=False)
-    return [int(mid) for mid in ranked.index if int(mid) not in exclude_ids][:n]
-
-
-def recommend_highest_rated(stats: pd.DataFrame, exclude_ids: set[int], n: int = N_PER_METHOD) -> list[int]:
-    """
-    Same Bayesian weighted-rating formula used in evaluate.py:
-      WR = (v / (v + m)) * R + (m / (v + m)) * C
-    """
-    C = float(stats["vote_average"].mean())
-    m = float(stats["vote_count"].quantile(0.90))
-
-    qualified = stats[stats["vote_count"] >= m].copy()
-    v = qualified["vote_count"]
-    R = qualified["vote_average"]
-    qualified["score"] = (v / (v + m)) * R + (m / (v + m)) * C
-
-    ranked = qualified.sort_values("score", ascending=False)
-    return [int(mid) for mid in ranked.index if int(mid) not in exclude_ids][:n]
-
-
-def recommend_random(
-    stats: pd.DataFrame,
-    exclude_ids: set[int],
-    seed: int,
-    n: int = N_PER_METHOD,
-) -> list[int]:
-    pool = np.array([int(mid) for mid in stats.index if int(mid) not in exclude_ids], dtype=np.int32)
-
-    if len(pool) == 0:
-        return []
-
-    rng = np.random.default_rng(seed)
-    picks = rng.choice(pool, size=min(n, len(pool)), replace=False)
-    return [int(mid) for mid in picks]
 
 
 def recommendation_display_value(row: pd.Series) -> str:
@@ -292,6 +398,7 @@ def main() -> None:
     dq_map = load_dialogue_features()
     movie_ids, movie_factors, movie_quality_scores = load_svd_model()
     franchise_map = load_franchise_map()
+    installment_trend = load_installment_rating_trend()
 
     model_movie_ids = set(int(mid) for mid in movie_ids)
     allowed_movie_ids = metadata_movie_ids.intersection(model_movie_ids)
@@ -334,19 +441,20 @@ def main() -> None:
             movie_quality_scores,
             dq_map,
             franchise_map,
+            installment_trend,
             n=N_PER_METHOD,
             exclude_ids=exclude_ids,
         )
 
         methods = {
             "our_system": algorithm_mids,
-            "popular": recommend_popular(stats, exclude_ids, n=N_PER_METHOD),
-            "highest_rated": recommend_highest_rated(stats, exclude_ids, n=N_PER_METHOD),
+            "popular": recommend_popular(exclude_ids, stats, n=N_PER_METHOD),
+            "highest_rated": recommend_highest_rated(exclude_ids, stats, n=N_PER_METHOD),
             "random": recommend_random(
-                stats,
                 exclude_ids,
-                seed=RANDOM_SEED + int(str(submission_id).replace("S", "")),
+                stats,
                 n=N_PER_METHOD,
+                seed=RANDOM_SEED + int(str(submission_id).replace("S", "")),
             ),
         }
 
@@ -364,4 +472,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if "--interactive" in sys.argv:
+        interactive_main()
+    else:
+        main()

@@ -1,0 +1,12 @@
+metric,value
+RMSE,0.8422491511920308
+Global_mean_RMSE,1.0603262634705737
+RMSE_delta,-0.21807711227854287
+Evaluated_rating_pairs,6645590.0
+Selected_k,50.0
+Ranking_users,500.0
+Candidate_movies,74038.0
+Metadata_movies,80287.0
+Model_movies,74038.0
+Precision_at_10,0.0632
+Recall_at_10,0.05442998354560968

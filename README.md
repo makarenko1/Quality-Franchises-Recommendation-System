@@ -1,70 +1,144 @@
 # Quality-Aware Franchise Movie Recommender
 
-A movie recommendation system that combines collaborative filtering with movie-quality signals from ratings, subtitle dialogue features, and franchise metadata. The system is designed to recommend movies that are personally relevant while avoiding low-quality franchise sequels.
+A movie recommendation system that combines collaborative filtering with quality signals from ratings, subtitle dialogue, and franchise metadata — recommending movies that are personally relevant while avoiding low-quality franchise sequels.
 
 ---
 
-## Project Overview
+## Overview
 
-The project builds two main datasets:
+The project builds two datasets:
 
-- `dataset.csv` — movie-level metadata and features.
-- `dataset_ratings_and_tags.csv` — user-item interaction data containing MovieLens ratings and tags.
+| File | Contents |
+|---|---|
+| `dataset.csv` | Movie-level metadata: genres, dialogue features, franchise info, IMDb ratings |
+| `dataset_ratings_and_tags.csv` | MovieLens 1M + 32M user-item ratings and tags |
 
-The recommender uses:
+The recommender combines five signals:
 
-1. **Collaborative filtering** from user ratings.
-2. **General movie quality** based on popularity and weighted rating quality.
-3. **Dialogue quality** from subtitle-derived language features.
-4. **Franchise awareness** based on franchise membership, installment number, and IMDb rating.
-5. **Old-movie penalty** to reduce bias toward older highly rated IMDb films without boosting newer movies.
+1. **Collaborative filtering** — SVD on user ratings
+2. **Item-quality prior** — popularity + Bayesian-weighted rating quality
+3. **Dialogue quality** — subtitle-derived language features
+4. **Franchise awareness** — franchise membership, installment number, IMDb rating
+5. **Old-movie penalty** — corrects IMDb's bias toward older, highly-rated films
 
-The final interactive recommender and evaluation use `dataset.csv` as the movie metadata source so that all methods work with the same project movie universe.
+Every entry point (CLI, Streamlit app, evaluation, participant survey) scores through the same code path in `recommendations_algorithm.py`, so all of them rank the same `dataset.csv` movie universe the same way.
 
 ---
 
-## Recommendation Model
-
-Recommendations are generated in `recommendations_algorithm.py`.
-
-The final recommender uses one consistent scoring configuration for the command-line recommender, Streamlit app, evaluation, and participant recommendation survey. Collaborative filtering remains the main recommendation signal, but the ranking is adjusted using dialogue/language quality, franchise quality, and an old-movie penalty to reduce bias toward older highly rated IMDb films. After the main ranking is produced, a lightweight post-filter removes clearly unsuitable candidates such as stand-up specials, live concert/comedy items, shorts, documentaries, and obvious genre mismatches.
+## How Scoring Works
 
 | Component | Weight | Description |
-|----------|--------|-------------|
-| Collaborative / quality score | 0.75 | Combines personalized latent similarity with a general item-quality prior |
-| Dialogue / language quality | 0.15 | Uses subtitle-derived language features as a meaningful quality-aware signal |
-| Franchise quality | 0.05 | Penalizes weaker later franchise installments and rewards maintained franchise quality |
-| Old-movie penalty | -0.05 | Pushes older movies downward to reduce IMDb age bias; newer movies are not boosted |
+|---|---:|---|
+| Collaborative / quality score | 0.75 | Latent similarity (0.60) + item-quality prior (0.40) |
+| Dialogue / language quality | 0.15 | Subtitle-derived language features |
+| Franchise quality | 0.05 | Rewards maintained quality, penalizes weaker later installments |
+| Old-movie penalty | -0.05 | Pushes older movies down; never boosts newer ones |
 
-Inside the collaborative / quality component:
+The item-quality prior is popularity (0.60) + rating quality (0.40). Dialogue quality is a weighted composite of 5 subtitle features (`negative_word_ratio` -0.35, `type_token_ratio` +0.25, `hapax_ratio` +0.15, `repeated_short_phrase_ratio` -0.15, `bigram_repetition_ratio` -0.10), compared against the average of the user's input movies — so it's part of the personalized ranking, not just a global filter.
 
-| Subcomponent | Weight | Description |
-|-------------|--------|-------------|
-| Latent similarity | 0.60 | Similarity between the user's selected movies and candidate movies |
-| Item-quality prior | 0.40 | General movie quality based on popularity and rating quality |
+Two refinements from milestone analysis, both on by default and toggleable via env var:
 
-The item-quality prior combines:
+- **Dialogue normalization is grouped by decade × genre** (`USE_GROUPED_DIALOGUE_NORMALIZATION`, default on). Dialogue-feature correlations with IMDb rating vary a lot by genre (e.g. `negative_word_ratio` r ≈ -0.11 for Crime vs. -0.02 for Documentary). Each feature is now min-max normalized within decade × genre groups (≥30 movies) instead of the whole catalog, falling back to global normalization for sparse groups.
+- **The later-installment penalty is graded, not flat** (`USE_INSTALLMENT_SHRINKAGE`, default on). Mean IMDb rating declines with installment number, but the estimate gets noisier at higher installments (fewer movies). The penalty (still capped at 0.20) is now scaled by a Bayesian-shrinkage-adjusted expected rating drop per installment bucket, instead of a flat -0.20 for any later installment.
 
-| Item-quality signal | Weight |
-|--------------------|--------|
-| Popularity | 0.60 |
-| Rating quality | 0.40 |
+A final lightweight post-filter removes clearly unsuitable candidates — stand-up specials, concerts, shorts, documentaries, genre mismatches — from the ranked list, replacing them with the next suitable candidate.
 
-Dialogue quality is a composite score built from subtitle features. Each feature is normalized before being combined:
+---
 
-| Dialogue feature | Weight | Interpretation |
-|-----------------|--------|----------------|
-| `negative_word_ratio` | -0.35 | More negative wording lowers the score |
-| `type_token_ratio` | 0.25 | Higher vocabulary diversity improves the score |
-| `hapax_ratio` | 0.15 | More one-time words slightly improves the score |
-| `repeated_short_phrase_ratio` | -0.15 | More repeated short phrases lowers the score |
-| `bigram_repetition_ratio` | -0.10 | More repeated two-word phrases lowers the score |
+## Setup
 
-For each user, the system compares candidate movies to the average dialogue-quality score of the user's selected input movies. This makes dialogue quality part of the personalized ranking rather than only a global filter.
+```bash
+git clone <repo-url> && cd Quality-Franchises-Recommendation-System
+pip install -r requirements.txt   # pandas, numpy, scipy, streamlit, matplotlib, nltk, gdown
+./setup.sh                        # downloads large data files (not stored in Git)
+```
 
-The release-year correction is implemented as a penalty only: older movies can be pushed slightly downward, but newer movies do not receive an extra positive boost. This avoids over-recommending very recent items just because they are new.
+---
 
-After scoring and sorting candidates, the recommender applies a final lightweight suitability filter. If a top-ranked movie is clearly unsuitable, it is skipped and replaced with the next lower-ranked suitable candidate. This prevents subtitle-heavy items such as stand-up specials or live comedy/concert recordings from appearing as recommendations for narrative movie inputs, while keeping the main scoring process fast.
+## Usage
+
+| Task | Command | Notes |
+|---|---|---|
+| Build datasets | `python main.py` | Builds `dataset.csv` and `dataset_ratings_and_tags.csv` from MovieLens/IMDb/OpenSubtitles/franchise data |
+| Run recommender (CLI) | `python recommendations_algorithm.py` | Prompts for 3 movies, prints ranked recommendations |
+| Run recommender (web) | `streamlit run app.py` | Same scoring path, browser UI |
+| Baselines | `python generate_recommendations.py --interactive` | Popular / highest-rated (Bayesian) / random, interactively |
+| Evaluate | `python evaluate.py` | RMSE, Precision@10/Recall@10 vs. baselines, franchise/dialogue diagnostics |
+| Analyze features | `python analyze_data.py` | Franchise/dialogue correlation analysis → `analysis_outputs/` |
+| Build participant recs | `python generate_recommendations.py` | See [below](#participant-recommendation-survey) |
+
+### Participant recommendation survey
+
+Input: a cleaned spreadsheet `recommendations_initial.xlsx` (sheet `initial_ratings_clean`) with columns `submission_id, timestamp, respondent, movie_rank, MovieID, Title, Year, Rating_1_5, is_positive_input`, already normalized — one movie per row, ratings on a 1–5 scale, `is_positive_input = True` for missing ratings or `Rating_1_5 >= 3.5`.
+
+`python generate_recommendations.py` outputs `recommendations_new.csv`: one row per participant, with 3 recommendations per method (`our_system`, `popular`, `highest_rated`, `random`), each formatted as `Movie Title (Year) [MovieID ID]`.
+
+---
+
+## Evaluation Results
+
+`evaluate.py` splits `dataset_ratings_and_tags.csv` into train/held-out test sets, fits a biased SVD (tuning k), and reports RMSE, Precision@10/Recall@10 against popular/highest-rated/random baselines plus franchise and dialogue diagnostics — using the same `recommend_from_movie_ids()` path as the main recommender. It then also loads the participant survey data in `survey-responses/` (if present) and produces the survey plots described [below](#participant-survey-results), all in one run.
+
+Current result, with both milestone refinements enabled (default):
+
+| Metric | Result |
+|---|---|
+| RMSE | 0.8422 (vs. 1.0603 global-mean baseline) |
+| Precision@10 | 0.0632 |
+| Recall@10 | 0.0544 |
+
+| Method | Precision@10 | Recall@10 |
+|---|---:|---:|
+| Recommendations algorithm | 0.0632 | 0.0544 |
+| Popular | 0.1162 | 0.0920 |
+| Highest-rated | 0.0492 | 0.0440 |
+| Random | 0.0000 | 0.0000 |
+
+The popular baseline remains strongest, which is expected in MovieLens held-out evaluation since universally-watched movies appear in many users' test sets. The model is more novel than popularity because it combines collaborative filtering with dialogue quality, franchise quality, an old-movie penalty, and a post-filter.
+
+**Ablation — grouped vs. global dialogue normalization:** run on the same split with `USE_GROUPED_DIALOGUE_NORMALIZATION=1` vs. `=0`. Global: 0.0624 / 0.0522. Grouped: 0.0632 / 0.0544 (+0.0008 / +0.0022) — a small, consistent gain, supporting the idea of comparing dialogue features to era/genre peers rather than the whole catalog.
+
+**Ablation — graded vs. flat installment penalty:** run with `USE_INSTALLMENT_SHRINKAGE=1` vs. `=0`. Both gave identical 0.0632 / 0.0544. Franchise quality is only a 0.05 weight, and the penalty only applies to same-franchise, later-installment candidates — too narrow a lever to move this 500-user sample. Kept as the default for being better-calibrated (it stops over-trusting sparse high-installment data), not for a measured lift.
+
+Supporting analysis: franchise installment vs. IMDb rating, Spearman ρ = -0.2985; top dialogue feature `negative_word_ratio` vs. IMDb rating, Spearman ρ = -0.1613.
+
+### Participant survey results
+
+Separate from the offline metrics above: 15 respondents each rated 3 movies from each of the 4 methods (blinded) and ranked the 4 method-groups best (1) to worst (4). `evaluate.py` recomputes the summary from the raw responses and cross-checks it against the pre-aggregated `survey-responses/results_by_method.csv` before plotting; this step is skipped automatically if `survey-responses/` is absent.
+
+| Method | Avg. relevance | Avg. would-watch | Avg. rank (1=best) | Ranked #1 |
+|---|---:|---:|---:|---:|
+| Our system | 4.07 | 4.04 | 1.60 | 9 / 15 |
+| Popular | 3.84 | 3.89 | 1.87 | 4 / 15 |
+| Highest-rated | 3.22 | 3.20 | 2.60 | 2 / 15 |
+| Random | 2.09 | 2.13 | 3.93 | 0 / 15 |
+
+Our system was ranked best by 9 of 15 participants and never ranked last, matching the offline evaluation's popular-baseline gap in the opposite direction: participants preferred it over the (offline-stronger) popular baseline on every subjective metric.
+
+### Saved output
+
+Every `python evaluate.py` run overwrites `evaluation_outputs/`:
+
+```text
+evaluation_outputs/
+├── evaluate_log.txt                  # full console output of the run
+├── summary_metrics.csv               # RMSE, Precision@10/Recall@10, dataset sizes
+├── method_comparison.csv             # Precision@10/Recall@10 per method
+├── k_tuning.csv                      # RMSE at each candidate k
+├── franchise_summary.csv             # franchise installment vs. rating correlation
+├── franchise_by_installment.csv      # mean rating / count / std per installment bucket
+├── dialogue_correlation.csv          # per-feature correlation with IMDb rating
+└── plots/
+    ├── precision_recall_by_method.png       # Precision@10/Recall@10 mean, by method
+    ├── precision_recall_distribution.png    # same, but the full per-user distribution
+    ├── k_tuning_rmse.png                    # RMSE vs. k, with the selected k marked
+    ├── franchise_rating_by_installment.png  # mean rating ± std per installment bucket
+    ├── survey_metrics_by_method.png         # 6-panel dashboard: relevance, would-watch,
+    │                                        # main score, novelty, avg. rank, times ranked #1
+    ├── survey_rank_distribution.png         # stacked bars: how often each method was
+    │                                        # ranked 1st..4th
+    └── survey_rating_distribution.png       # per-movie relevance/would-watch spread, box plots
+```
 
 ---
 
@@ -72,343 +146,42 @@ After scoring and sorting candidates, the recommender applies a final lightweigh
 
 ```text
 .
-├── main.py                              # Main data pipeline
-├── recommendations_algorithm.py         # Final recommender
-├── evaluate.py                          # Offline evaluation
-├── interactive_baselines.py             # Interactive popular / highest-rated / random baselines
-├── build_recommendation_survey.py       # Builds participant recommendation table
-├── app.py                               # Streamlit web app
-├── analyze_data.py                      # Franchise and dialogue analysis
-├── dataset.csv                          # Movie-level dataset
-├── dataset_ratings_and_tags.csv         # Combined ratings/tags interaction dataset
-├── initial_ratings_sheet.xlsx           # Cleaned participant input sheet
-├── recommendations_wide_to_send.csv     # Recommendation table for follow-up survey
-├── setup.sh                             # Downloads large files and sets up repo data
-│
+├── main.py                        # Data pipeline: builds dataset.csv and dataset_ratings_and_tags.csv
+├── recommendations_algorithm.py   # Final recommender, shared by every entry point below
+├── evaluate.py                    # Offline evaluation (RMSE, Precision@K/Recall@K, diagnostics)
+├── generate_recommendations.py    # Builds the participant recommendation table; --interactive queries baselines from the CLI
+├── app.py                         # Streamlit web app
+├── analyze_data.py                # Franchise and dialogue correlation analysis
+├── setup.sh                       # Downloads large data files
+├── dataset.csv                    # Movie-level dataset
+├── dataset_ratings_and_tags.csv   # Combined ratings/tags interaction dataset
+├── survey-responses/              # Collected participant survey responses
 └── datasets/
-    ├── movies-1M/                       # MovieLens 1M processed files
-    ├── movies-32M/                      # MovieLens 32M processed files
-    ├── imdb/                            # IMDb title and rating files
-    ├── opensubtitles/subs/              # Subtitle .srt files
-    └── franchises/franchises.csv        # Franchise metadata
+    ├── movies-1M/                 # MovieLens 1M processed files
+    ├── movies-32M/                # MovieLens 32M processed files
+    ├── imdb/                      # IMDb title and rating files
+    ├── opensubtitles/subs/        # Subtitle .srt files
+    └── franchises/franchises.csv  # Franchise metadata
 ```
-
----
-
-## Setup
-
-### 1. Clone the repository
-
-```bash
-git clone <repo-url>
-cd Quality-Franchises-Recommendation-System
-```
-
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-The project uses packages such as `pandas`, `numpy`, `scipy`, `streamlit`, `matplotlib`, `nltk`, and `gdown`.
-
-### 3. Download large data files
-
-```bash
-./setup.sh
-```
-
-The setup script pulls the latest repository version, downloads the large data archive from Google Drive using `gdown`, unzips it into the project directory, and removes the temporary archive.
-
-Large generated or raw data files are not stored directly in GitHub because of file-size limits.
-
----
-
-## Building the Dataset
-
-Run:
-
-```bash
-python main.py
-```
-
-This script:
-
-1. Preprocesses MovieLens 1M.
-2. Preprocesses MovieLens 32M.
-3. Builds or updates `dataset.csv`.
-4. Appends MovieLens 32M movies not already present.
-5. Adds IMDb metadata and ratings.
-6. Adds OpenSubtitles dialogue features.
-7. Adds franchise metadata.
-8. Builds `dataset_ratings_and_tags.csv`.
-
-`dataset.csv` is the movie-level feature dataset.  
-`dataset_ratings_and_tags.csv` is the interaction dataset used for SVD, evaluation, and baselines.
-
-The interaction dataset contains explicit ratings and optional user tags. The recommendation model keeps only explicit rating rows when fitting SVD.
-
----
-
-## Running the Recommender
-
-### Streamlit app
-
-```bash
-streamlit run app.py
-```
-
-The app lets a user choose movies and returns recommendations from the final model.
-
-### Command-line recommender
-
-```bash
-python recommendations_algorithm.py
-```
-
-The script loads:
-
-- `dataset.csv` for movie metadata, dialogue features, and franchise metadata.
-- `dataset_ratings_and_tags.csv` for fitting the SVD model.
-
-If `dataset_ratings_and_tags.csv` is missing, the recommender can fall back to the cleaned MovieLens 1M ratings file.
-
----
-
-## Interactive Baselines
-
-Run:
-
-```bash
-python interactive_baselines.py
-```
-
-This script provides three baseline recommenders:
-
-| Baseline | Description |
-|---------|-------------|
-| Popular | Recommends the most-rated movies |
-| Highest-rated | Uses Bayesian weighted rating |
-| Random | Randomly samples candidate movies |
-
-The baselines read `dataset_ratings_and_tags.csv` and use the same `dataset.csv` movie universe as the main recommender.
-
----
-
-## Evaluation
-
-Run:
-
-```bash
-python evaluate.py
-```
-
-The evaluation script:
-
-1. Loads ratings from `dataset_ratings_and_tags.csv`.
-2. Keeps only explicit rating interactions.
-3. Offsets MovieLens 32M user IDs to avoid collisions with MovieLens 1M user IDs.
-4. Splits ratings into train and held-out test sets.
-5. Fits a biased SVD model.
-6. Tunes the number of latent factors.
-7. Computes RMSE against a global-mean baseline.
-8. Computes Precision@10 and Recall@10.
-9. Compares the final recommender against:
-   - popular baseline,
-   - highest-rated baseline,
-   - random baseline.
-10. Reports franchise and dialogue-feature diagnostics.
-
-The evaluation uses the same `recommend_from_movie_ids()` scoring path as the main recommender.
-
-### Current evaluation summary
-
-The final post-filtered model achieved:
-
-| Metric | Result |
-|--------|--------|
-| RMSE | 0.8422 |
-| Global-mean RMSE | 1.0603 |
-| RMSE improvement | -0.2181 |
-| Precision@10 | 0.0624 |
-| Recall@10 | 0.0522 |
-
-Baseline comparison:
-
-| Method | Precision@10 | Recall@10 |
-|--------|-------------:|----------:|
-| Recommendations algorithm | 0.0624 | 0.0522 |
-| Popular | 0.1162 | 0.0920 |
-| Highest-rated | 0.0492 | 0.0440 |
-| Random | 0.0000 | 0.0000 |
-
-The final model outperforms the highest-rated and random baselines in top-10 ranking metrics. The popular baseline remains strongest, which is expected in MovieLens held-out evaluation because universally watched movies are more likely to appear in many users' test ratings. The proposed model is more novel than popularity because it combines collaborative filtering with dialogue quality, franchise quality, an old-movie penalty, and a post-ranking suitability filter.
-
-Supporting analysis:
-
-| Analysis | Result |
-|----------|--------|
-| Franchise installment vs IMDb rating | Spearman rho = -0.2985 |
-| Top dialogue feature | `negative_word_ratio` |
-| `negative_word_ratio` vs IMDb rating | Spearman rho = -0.1613 |
-
-These results support the use of franchise and dialogue signals as quality-aware adjustments, even though collaborative filtering remains the strongest recommendation component.
-
----
-
-## Analysis
-
-Run:
-
-```bash
-python analyze_data.py
-```
-
-This script analyzes:
-
-1. Whether later franchise installments tend to have lower IMDb ratings.
-2. Whether subtitle dialogue features correlate with IMDb rating.
-3. Whether dialogue features correlate with mean user rating.
-4. Whether stopword-removed and stemmed content-word features add useful signal.
-5. Genre, decade, and data-quality controls.
-
-Outputs are saved in:
-
-```text
-analysis_outputs/
-```
-
-Important generated files include:
-
-- franchise installment plots,
-- dialogue-feature correlation plots,
-- content-stemmed feature correlation plots,
-- genre and decade heatmaps,
-- `analysis_summary.txt`.
-
----
-
-## Participant Recommendation Survey Workflow
-
-The follow-up survey workflow uses manually collected participant movie preferences.
-
-### Input file
-
-Use the cleaned spreadsheet:
-
-```text
-initial_ratings_sheet.xlsx
-```
-
-Expected sheet name:
-
-```text
-initial_ratings_clean
-```
-
-Expected columns:
-
-```text
-submission_id
-timestamp
-respondent
-movie_rank
-MovieID
-Title
-Year
-Rating_Original
-RatingScale_Original
-Rating_1_5
-is_positive_input
-```
-
-The spreadsheet should already be normalized before running the script:
-
-- one movie per row;
-- Hebrew/English duplicate respondent names merged where needed;
-- only the latest three movie rows kept for each unique respondent;
-- all ratings converted to a 1–5 scale in `Rating_1_5`;
-- old 1–10 ratings converted by dividing by 2;
-- new 1–5 ratings left unchanged;
-- missing ratings treated as selected liked movies;
-- `is_positive_input = True` for missing ratings or `Rating_1_5 >= 3.5`.
-
-The current cleaned survey sheet contains 15 unique respondents and 45 movie rows.
-
-### Build the recommendation table
-
-Run:
-
-```bash
-python generate_recommendations.py
-```
-
-The script outputs only:
-
-```text
-recommendations_wide_to_send.csv
-```
-
-This file has one row per participant/submission, with separate columns for each method:
-
-```text
-submission_id
-respondent
-timestamp
-input_movies
-our_system_1
-our_system_2
-our_system_3
-popular_1
-popular_2
-popular_3
-highest_rated_1
-highest_rated_2
-highest_rated_3
-random_1
-random_2
-random_3
-```
-
-Each recommendation cell is formatted as:
-
-```text
-Movie Title (Year) [MovieID ID]
-```
-
-This wide file is intended for manually sending recommendations to participants for ranking.
 
 ---
 
 ## Data Sources
 
 | Dataset | Description |
-|---------|-------------|
-| MovieLens 1M | Movie ratings, tags, and metadata |
-| MovieLens 32M | Larger MovieLens ratings, tags, and movie metadata |
-| IMDb | Title metadata and IMDb aggregate ratings |
+|---|---|
+| MovieLens 1M / 32M | Ratings, tags, movie metadata |
+| IMDb | Title metadata and aggregate ratings |
 | OpenSubtitles | Subtitle `.srt` files used for dialogue features |
 | Franchise metadata | Curated franchise membership and installment order |
 
 ---
 
-## Notes on Large Files
+## Notes
 
-The following files are large and may be excluded from Git:
+Large/generated files excluded from Git — `dataset_ratings_and_tags.csv`, `datasets/movies-32M/`, `datasets/imdb/raw/`, `datasets/opensubtitles/subs/`, `analysis_outputs/` — are recreated via `./setup.sh` and `python main.py`.
 
-```text
-dataset_ratings_and_tags.csv
-datasets/movies-32M/
-datasets/imdb/raw/
-datasets/opensubtitles/subs/
-analysis_outputs/
-```
-
-They can be recreated or restored using `setup.sh` and the project pipeline.
-
----
-
-## Typical Workflow
+Typical workflow:
 
 ```bash
 ./setup.sh
@@ -416,10 +189,5 @@ python main.py
 python analyze_data.py
 python evaluate.py
 streamlit run app.py
-```
-
-For the participant follow-up recommendations:
-
-```bash
-python generate_recommendations.py
+python generate_recommendations.py   # participant follow-up recommendations
 ```

@@ -1,0 +1,85 @@
+
+==============================================================
+  Setup phase
+==============================================================
+  Reading ratings from combined file ...
+  Split ratings: 26,190,918 train | 6,649,704 test
+  Users: 206,773 | Movies: 74,038
+  Building SVD at k=50 ...
+  Users with at least one relevant test item: 204,233
+  Metadata source: dataset.csv
+  Metadata movies: 80,287
+  Model movies: 74,038
+  Candidate movies: 74,038
+  Model movies without metadata: 0
+  Metadata movies without model factors: 6,249
+  SVD setup completed in 7.5s
+  Selecting k:
+  k            RMSE
+  ------------------
+  20         0.8463  ←
+  50         0.8422  ←
+  100        0.8422
+  200        0.8422
+  Selected k: 50
+Loading dialogue features from dataset...
+  Grouped dialogue normalization: decade x genre (min group size = 30).
+
+Recommender system performance:
+  RMSE: 0.8422
+  Global-mean RMSE: 1.0603
+  RMSE delta: -0.2181
+  Evaluated rating pairs: 6,645,590
+  Ranking users: 500
+  Candidate movies: 74,038
+  Metadata movies: 80,287
+  Model movies: 74,038
+  Model movies without metadata: 0
+  Metadata movies without model factors: 6,249
+
+  Method                       Precision@10    Recall@10    Delta P    Delta R
+  ------------------------------------------------------------------------------
+  Recommendations algorithm          0.0632       0.0544    +0.0000    +0.0000
+  Popular                            0.1162       0.0920    +0.0530    +0.0375
+  Highest-rated                      0.0492       0.0440    -0.0140    -0.0104
+  Random                             0.0000       0.0000    -0.0632    -0.0544
+Franchise analysis:
+  Franchise n: 1,736
+  Spearman rho: -0.2985
+  Spearman p: 0.0000
+  Pearson r: -0.2669
+  Pearson p: 0.0000
+Dialogue feature correlation:
+  Features evaluated: 27
+  Top feature: negative_word_ratio
+  Top feature n: 42,292
+  Pearson r: -0.1446
+  Pearson p: 0.0000
+  Spearman rho: -0.1613
+  Spearman p: 0.0000
+
+  Saved CSVs to evaluation_outputs/
+  Saved plots to evaluation_outputs/plots/
+
+==============================================================
+  Participant survey results
+==============================================================
+  Summary by method:
+               n_respondents  n_movie_ratings  avg_relevance  std_relevance  avg_would_watch  std_would_watch  avg_group_rank  std_group_rank  avg_novelty  std_novelty  ranked_1st_count  main_score
+method                                                                                                                                                                                               
+our_system                15               45          4.067          0.986            4.044            0.952           1.600           0.828        3.467        0.834                 9       4.056
+popular                   15               45          3.844          0.976            3.889            0.959           1.867           0.743        2.800        1.082                 4       3.867
+highest_rated             15               45          3.222          1.085            3.200            1.198           2.600           0.737        2.733        0.704                 2       3.211
+random                    15               45          2.089          0.874            2.133            0.894           3.933           0.258        3.000        1.254                 0       2.111
+
+  Rank distribution (rows = method, columns = rank 1..4):
+group_rank_1_best  1   2   3   4
+method                          
+our_system         9   3   3   0
+popular            4  10   0   1
+highest_rated      2   2  11   0
+random             0   0   1  14
+  Recomputed summary matches results_by_method.csv.
+  Saved survey plots to evaluation_outputs/plots/
+
+  Saved full log to evaluation_outputs/evaluate_log.txt

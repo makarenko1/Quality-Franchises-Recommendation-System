@@ -4,6 +4,30 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import svds
 
+# Dialogue style differs by genre and era (e.g. crime/action dialogue reads far
+# more "negative" than documentary/horror dialogue at the same quality level;
+# see analysis in the milestone writeup). Normalizing dialogue features within
+# decade x primary-genre groups instead of globally makes the dialogue-quality
+# signal comparable to same-era, same-genre peers rather than to the whole
+# catalog. Small groups fall back to global normalization so sparse cells
+# (rare genre/decade combinations) do not get noisy min/max ranges.
+USE_GROUPED_DIALOGUE_NORMALIZATION = os.environ.get(
+    "USE_GROUPED_DIALOGUE_NORMALIZATION", "1"
+) != "0"
+MIN_DIALOGUE_GROUP_SIZE = 30
+
+# Franchise installment analysis found that mean IMDb rating declines as
+# installment number increases, but the estimate gets noisier (fewer movies,
+# wider variance) at higher installment numbers. Instead of a flat penalty for
+# any later installment, shrink each installment bucket's mean rating toward
+# the overall mean in proportion to how few movies back that bucket (same
+# Bayesian-shrinkage idea as the highest-rated baseline), then scale the
+# penalty by the resulting (de-noised) expected rating drop.
+USE_INSTALLMENT_SHRINKAGE = os.environ.get("USE_INSTALLMENT_SHRINKAGE", "1") != "0"
+INSTALLMENT_SHRINKAGE_PRIOR = 20.0  # pseudo-count strength pulling sparse buckets to the mean
+MAX_INSTALLMENT_BUCKET = 5          # installments beyond this are grouped, matching analyze_data.py
+MAX_INSTALLMENT_PENALTY = 0.20      # cap, matches the previous flat penalty magnitude
+
 RATINGS_PATH = "dataset_ratings_and_tags.csv"
 DATASET_PATH = "dataset.csv"
 # Use the project dataset as the movie metadata source so evaluation and the
@@ -93,19 +117,63 @@ def load_movies_metadata(movies_path=MOVIES_PATH):
 
     return movies.drop_duplicates(subset=["MovieID"], keep="first").reset_index(drop=True)
 
-def load_dialogue_features(dataset_path=DATASET_PATH):
+def _minmax_normalize(values):
+    """Min-max normalize a Series to [0, 1], falling back to 0.5 if constant."""
+    mn, mx = float(values.min()), float(values.max())
+    if mx > mn:
+        return (values - mn) / (mx - mn)
+    return pd.Series(0.5, index=values.index)
+
+
+def _grouped_minmax_normalize(values, group_keys, min_group_size=MIN_DIALOGUE_GROUP_SIZE):
+    """
+    Min-max normalize a Series within each group (e.g. decade x primary genre),
+    falling back to a global min-max for rows whose group is too small or
+    unknown. This keeps the dialogue score comparable to same-era, same-genre
+    peers instead of the whole catalog, while avoiding noisy ranges for sparse
+    genre/decade cells.
+    """
+    global_normalized = _minmax_normalize(values)
+
+    group_sizes = group_keys.groupby(group_keys).transform("size")
+    usable_group = group_keys.notna() & (group_sizes >= min_group_size)
+
+    if not usable_group.any():
+        return global_normalized
+
+    result = global_normalized.copy()
+    grouped = values[usable_group].groupby(group_keys[usable_group])
+    group_min = grouped.transform("min")
+    group_max = grouped.transform("max")
+    within_group_range = group_max > group_min
+
+    normalized_in_group = pd.Series(0.5, index=values.index[usable_group])
+    normalized_in_group[within_group_range] = (
+        (values[usable_group] - group_min)[within_group_range]
+        / (group_max - group_min)[within_group_range]
+    )
+    result.loc[usable_group] = normalized_in_group
+    return result
+
+
+def load_dialogue_features(dataset_path=DATASET_PATH, grouped=USE_GROUPED_DIALOGUE_NORMALIZATION):
     """
     Load per-movie dialogue quality scores from precomputed dataset.csv.
 
     Uses dialogue features that showed measurable correlation with IMDb ratings.
     The composite score is normalized to [0, 1].
+
+    When `grouped` is True, each feature is normalized within decade x primary
+    genre groups (falling back to global normalization for small/unknown
+    groups) instead of across the whole catalog, since dialogue style differs
+    by genre and era.
     """
     print("Loading dialogue features from dataset...")
     if not os.path.exists(dataset_path):
         print(f"  {dataset_path} not found; dialogue features disabled.")
         return {}
 
-    cols_needed = ["MovieID"] + list(DIALOGUE_FEATURE_WEIGHTS)
+    cols_needed = ["MovieID", "Year", "Genre1"] + list(DIALOGUE_FEATURE_WEIGHTS)
     available = pd.read_csv(dataset_path, nrows=0).columns.tolist()
     cols_to_read = [c for c in cols_needed if c in available]
     missing = set(cols_needed) - set(cols_to_read)
@@ -128,17 +196,31 @@ def load_dialogue_features(dataset_path=DATASET_PATH):
         print("  No rows with complete dialogue features; dialogue scores disabled.")
         return {}
 
+    group_keys = None
+    if grouped and "Year" in df.columns and "Genre1" in df.columns:
+        year = pd.to_numeric(df["Year"], errors="coerce")
+        decade = (year // 10 * 10)
+        genre = df["Genre1"].astype(str).str.strip().replace({"": np.nan, "nan": np.nan})
+        has_group = decade.notna() & genre.notna()
+        group_keys = pd.Series(np.nan, index=df.index, dtype=object)
+        group_keys[has_group] = (
+            genre[has_group] + "_" + decade[has_group].astype(int).astype(str) + "s"
+        )
+        print(f"  Grouped dialogue normalization: decade x genre "
+              f"(min group size = {MIN_DIALOGUE_GROUP_SIZE}).")
+    elif grouped:
+        print("  Grouped dialogue normalization requested but Year/Genre1 "
+              "unavailable; using global normalization.")
+
     normalized_features = []
     total_abs_weight = 0.0
 
     for col, weight in DIALOGUE_FEATURE_WEIGHTS.items():
         values = df[col].astype(float)
-        mn, mx = float(values.min()), float(values.max())
-
-        if mx > mn:
-            normalized = (values - mn) / (mx - mn)
+        if group_keys is not None:
+            normalized = _grouped_minmax_normalize(values, group_keys)
         else:
-            normalized = pd.Series(0.5, index=df.index)
+            normalized = _minmax_normalize(values)
 
         normalized_features.append(weight * normalized)
         total_abs_weight += abs(float(weight))
@@ -375,6 +457,82 @@ def load_franchise_map(dataset_path=DATASET_PATH):
     }
 
 
+def load_installment_rating_trend(dataset_path=DATASET_PATH):
+    """
+    Return a shrinkage-adjusted mean IMDb rating by franchise-installment bucket.
+
+    Milestone analysis found that mean rating declines as installment number
+    increases, but the trend gets noisier (fewer movies, wider variance) at
+    higher installment numbers. Each bucket's raw mean is pulled toward the
+    overall mean in proportion to how few movies back it, using the same
+    Bayesian-shrinkage idea as the highest-rated baseline:
+        shrunk = (n / (n + m)) * bucket_mean + (m / (n + m)) * global_mean
+    Installment numbers above MAX_INSTALLMENT_BUCKET are grouped into one
+    bucket, matching the "5+" grouping used in analyze_data.py.
+    """
+    if not os.path.exists(dataset_path):
+        return {}
+
+    available = pd.read_csv(dataset_path, nrows=0).columns.tolist()
+    cols = [c for c in ("FranchiseInstallment", "imdb_averageRating") if c in available]
+    if len(cols) < 2:
+        return {}
+
+    df = pd.read_csv(dataset_path, usecols=cols, low_memory=False)
+    df["FranchiseInstallment"] = pd.to_numeric(df["FranchiseInstallment"], errors="coerce")
+    df["imdb_averageRating"] = pd.to_numeric(df["imdb_averageRating"], errors="coerce")
+    df = df.dropna(subset=["FranchiseInstallment", "imdb_averageRating"])
+    if df.empty:
+        return {}
+
+    df["bucket"] = df["FranchiseInstallment"].clip(upper=MAX_INSTALLMENT_BUCKET).astype(int)
+    global_mean = float(df["imdb_averageRating"].mean())
+
+    stats = df.groupby("bucket")["imdb_averageRating"].agg(["mean", "count"])
+    m = INSTALLMENT_SHRINKAGE_PRIOR
+    shrunk = (
+        (stats["count"] / (stats["count"] + m)) * stats["mean"]
+        + (m / (stats["count"] + m)) * global_mean
+    )
+
+    return {int(bucket): float(value) for bucket, value in shrunk.items()}
+
+
+def installment_trend_penalty(candidate_inst, input_inst, installment_trend):
+    """
+    Graded, shrinkage-aware penalty for a candidate whose installment number is
+    later than the user's inputs.
+
+    Instead of a flat penalty for any later installment, this scales the
+    penalty by how much the shrinkage-adjusted expected rating actually drops
+    between the inputs' (earliest) installment and the candidate's, so sparse
+    high-installment buckets (which are noisier) do not produce an outsized
+    penalty. Falls back to the old flat penalty if shrinkage is disabled or
+    the trend is unavailable.
+    """
+    if not USE_INSTALLMENT_SHRINKAGE or not installment_trend:
+        return MAX_INSTALLMENT_PENALTY
+
+    baseline_inst = min(float(x) for x in input_inst)
+    candidate_bucket = min(int(candidate_inst), MAX_INSTALLMENT_BUCKET)
+    baseline_bucket = min(int(baseline_inst), MAX_INSTALLMENT_BUCKET)
+
+    candidate_expected = installment_trend.get(candidate_bucket)
+    baseline_expected = installment_trend.get(baseline_bucket)
+    first_expected = installment_trend.get(1)
+    last_expected = installment_trend.get(MAX_INSTALLMENT_BUCKET)
+
+    if None in (candidate_expected, baseline_expected, first_expected, last_expected):
+        return MAX_INSTALLMENT_PENALTY
+
+    drop = baseline_expected - candidate_expected
+    full_range = first_expected - last_expected
+    if drop <= 0 or full_range <= 0:
+        return 0.0
+
+    return MAX_INSTALLMENT_PENALTY * min(1.0, drop / full_range)
+
+
 def cosine_sim(a, b):
     denom = np.linalg.norm(a) * np.linalg.norm(b)
     return float(np.dot(a, b) / denom) if denom > 0 else 0.0
@@ -526,7 +684,7 @@ def resolve_input_ids(input_titles, movies, mid_to_idx):
     return input_ids
 
 
-def franchise_signal(candidate_id, input_ids, franchise_map):
+def franchise_signal(candidate_id, input_ids, franchise_map, installment_trend=None):
     """
     Conservative franchise signal:
       - unrelated movies are neutral (0.5),
@@ -562,9 +720,12 @@ def franchise_signal(candidate_id, input_ids, franchise_map):
         else:
             score = 0.50
 
-    # Later installments tend to score lower, so be cautious with them.
+    # Later installments tend to score lower, so be cautious with them. The
+    # penalty is graded and shrinkage-aware rather than a flat -0.20; see
+    # installment_trend_penalty().
     if input_inst and pd.notna(candidate_inst) and float(candidate_inst) > max(map(float, input_inst)):
-        score = max(0.0, score - 0.20)
+        penalty = installment_trend_penalty(candidate_inst, input_inst, installment_trend)
+        score = max(0.0, score - penalty)
 
     return float(np.clip(score, 0.0, 1.0))
 
@@ -577,6 +738,7 @@ def _recommend_scored_candidates(
     movie_biases_norm,
     dq_map,
     franchise_map,
+    installment_trend=None,
     n=3,
     exclude_ids=None,
 ):
@@ -620,7 +782,7 @@ def _recommend_scored_candidates(
         dq_score = 1.0 - abs(movie_dq - user_dq)
 
         # Franchise awareness uses IMDb/installment metadata when available.
-        franchise_score = franchise_signal(mid, clean_input_ids, franchise_map)
+        franchise_score = franchise_signal(mid, clean_input_ids, franchise_map, installment_trend)
 
         # Old-movie correction: old movies are pushed downward, while newer movies
         # receive no extra bonus.
@@ -657,6 +819,7 @@ def recommend_from_movie_ids(
     movie_biases_norm,
     dq_map,
     franchise_map,
+    installment_trend=None,
     n=3,
     exclude_ids=None,
 ):
@@ -673,6 +836,7 @@ def recommend_from_movie_ids(
         movie_biases_norm,
         dq_map,
         franchise_map,
+        installment_trend,
         n=n,
         exclude_ids=exclude_ids,
     )
@@ -687,6 +851,7 @@ def recommend(
     movie_biases_norm,
     dq_map,
     franchise_map,
+    installment_trend=None,
     n=3,
 ):
     mid_to_idx = {int(mid): i for i, mid in enumerate(movie_ids)}
@@ -705,6 +870,7 @@ def recommend(
         movie_biases_norm,
         dq_map,
         franchise_map,
+        installment_trend,
         n=n,
     )
 
@@ -735,6 +901,7 @@ def main():
     dq_map                             = load_dialogue_features()
     movie_ids, movie_factors, mb_norm  = load_svd_model()
     franchise_map                      = load_franchise_map()
+    installment_trend                  = load_installment_rating_trend()
 
     while True:
         print("\nEnter 3 movies you like (or 'quit' to exit):")
@@ -747,7 +914,7 @@ def main():
 
         results = recommend(
             titles, movies, movie_ids, movie_factors, mb_norm,
-            dq_map, franchise_map,
+            dq_map, franchise_map, installment_trend,
         )
 
         if results:

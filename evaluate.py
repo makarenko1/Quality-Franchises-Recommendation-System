@@ -15,10 +15,15 @@ ratings. 32M UserIDs are offset by USER_ID_32M_OFFSET to avoid collisions.
 from __future__ import annotations
 
 import gc
+import sys
 import time
 from collections import defaultdict
 from pathlib import Path
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
@@ -30,6 +35,7 @@ from recommendations_algorithm import (
     load_movies_metadata,
     load_dialogue_features,
     load_franchise_map,
+    load_installment_rating_trend,
     recommend_from_movie_ids,
 )
 
@@ -37,6 +43,27 @@ from recommendations_algorithm import (
 
 RATINGS_AND_TAGS_PATH = Path("dataset_ratings_and_tags.csv")
 DATASET_PATH          = Path("dataset.csv")
+
+OUTPUT_DIR = Path("evaluation_outputs")   # saved log, CSVs, and plots from the latest run
+PLOTS_DIR  = OUTPUT_DIR / "plots"
+
+# Participant survey data (see save_survey_results()). Optional: skipped if absent.
+SURVEY_RESPONSES_PATH = Path("survey-responses/responses_for_recommendations.csv")
+SURVEY_SUMMARY_PATH   = Path("survey-responses/results_by_method.csv")
+
+SURVEY_METHOD_ORDER = ["our_system", "popular", "highest_rated", "random"]
+SURVEY_METHOD_LABELS = {
+    "our_system": "Our system",
+    "popular": "Popular",
+    "highest_rated": "Highest-rated",
+    "random": "Random",
+}
+SURVEY_METHOD_COLORS = {
+    "our_system": "#4C72B0",
+    "popular": "#DD8452",
+    "highest_rated": "#55A868",
+    "random": "#C44E52",
+}
 
 USER_ID_32M_OFFSET  = 300_000   # added to all 32M UserIDs to avoid collisions
 
@@ -380,23 +407,25 @@ def compute_rmse(
 
 # ── k-tuning ──────────────────────────────────────────────────────────────────
 
-def tune_k(model: dict, test: pd.DataFrame, k_values: list[int] = K_VALUES) -> int:
+def tune_k(model: dict, test: pd.DataFrame, k_values: list[int] = K_VALUES) -> tuple[int, list[tuple[int, float]]]:
     """
     Evaluate RMSE at each k by truncating a single pre-trained model's factors.
-    Returns the k with the lowest test RMSE.
+    Returns (best_k, [(k, rmse), ...]) so the curve can be saved/plotted.
     """
     print(f"  {'k':<8} {'RMSE':>8}")
     print(f"  {'-' * 18}")
     best_k, best_rmse = k_values[0], float("inf")
+    curve: list[tuple[int, float]] = []
     for k in k_values:
         rmse, _, _ = compute_rmse(model, test, k=k)
+        curve.append((k, rmse))
         marker = ""
         if rmse < best_rmse:
             best_rmse = rmse
             best_k = k
             marker = "  ←"
         print(f"  {k:<8} {rmse:>8.4f}{marker}")
-    return best_k
+    return best_k, curve
 
 
 # ── Recommendation methods ────────────────────────────────────────────────────
@@ -408,6 +437,7 @@ def algorithm_recommender(
     train_input_movies: dict[int, list[int]],
     dq_map: dict[int, float],
     franchise_map: dict,
+    installment_trend: dict,
     top_n: int = K,
 ):
     """Evaluate the same recommendation logic used by recommendations_algorithm.recommend()."""
@@ -427,6 +457,7 @@ def algorithm_recommender(
             movie_quality_scores,
             dq_map,
             franchise_map,
+            installment_trend,
             n=top_n,
             exclude_ids=train_movies.get(int(user_id), set()),
         )
@@ -526,10 +557,11 @@ def eval_ranking(
     relevant_by_user: dict[int, set[int]],
     user_ids: list[int],
     k: int = K,
-) -> tuple[float, float]:
+) -> tuple[float, float, list[float], list[float]]:
     """
-    Mean Precision@K and Recall@K over selected users with ≥1 relevant item.
-    Relevant = rating ≥ RELEVANCE_THRESHOLD.
+    Mean Precision@K and Recall@K over selected users with ≥1 relevant item,
+    plus the raw per-user lists (used to plot the score distribution, not just
+    the mean). Relevant = rating ≥ RELEVANCE_THRESHOLD.
     """
     p_list: list[float] = []
     r_list: list[float] = []
@@ -539,7 +571,7 @@ def eval_ranking(
         hits = sum(1 for m in top_k if m in relevant)
         p_list.append(hits / k)
         r_list.append(hits / len(relevant))
-    return float(np.mean(p_list)), float(np.mean(r_list))
+    return float(np.mean(p_list)), float(np.mean(r_list)), p_list, r_list
 
 # ── Franchise analysis ────────────────────────────────────────────────────────
 
@@ -553,7 +585,8 @@ def franchise_analysis(dataset: pd.DataFrame) -> dict | None:
     rho, p_sp = spearmanr(df["FranchiseInstallment"], df["imdb_averageRating"])
     r,   p_pe = pearsonr( df["FranchiseInstallment"], df["imdb_averageRating"])
     df["group"] = df["FranchiseInstallment"].clip(upper=5).astype(int)
-    by_inst = df.groupby("group")["imdb_averageRating"].agg(mean="mean", count="count")
+    by_inst = df.groupby("group")["imdb_averageRating"].agg(mean="mean", count="count", std="std")
+    by_inst["std"] = by_inst["std"].fillna(0.0)
     return {
         "n": len(df),
         "spearman_r": float(rho), "spearman_p": float(p_sp),
@@ -603,6 +636,431 @@ def section(title: str) -> None:
     print("=" * 62)
 
 
+class _Tee:
+    """Write everything to both the original stream and a log file."""
+
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for stream in self.streams:
+            stream.write(data)
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
+
+
+def save_results_csv(
+    output_dir: Path,
+    svd_rmse: float,
+    mean_rmse: float,
+    n_eval: int,
+    best_k: int,
+    eval_user_ids: list[int],
+    allowed_movie_ids: set[int],
+    metadata_movie_ids: set[int],
+    model_movie_ids: set[int],
+    methods: list[tuple[str, object]],
+    results: dict[str, tuple[float, float]],
+    k_tuning_curve: list[tuple[int, float]],
+    fa: dict | None,
+    corr: pd.DataFrame,
+) -> None:
+    """Save the run's headline metrics, method comparison, k-tuning curve, and
+    franchise/dialogue diagnostics as CSVs so results can be tracked across runs
+    without re-parsing the text log."""
+    alg_p, alg_r = results["Recommendations algorithm"]
+
+    summary = {
+        "RMSE": svd_rmse,
+        "Global_mean_RMSE": mean_rmse,
+        "RMSE_delta": svd_rmse - mean_rmse,
+        "Evaluated_rating_pairs": n_eval,
+        "Selected_k": best_k,
+        "Ranking_users": len(eval_user_ids),
+        "Candidate_movies": len(allowed_movie_ids),
+        "Metadata_movies": len(metadata_movie_ids),
+        "Model_movies": len(model_movie_ids),
+        f"Precision_at_{K}": alg_p,
+        f"Recall_at_{K}": alg_r,
+    }
+    pd.DataFrame(summary.items(), columns=["metric", "value"]).to_csv(
+        output_dir / "summary_metrics.csv", index=False
+    )
+
+    method_rows = [
+        {
+            "method": name,
+            f"precision_at_{K}": p,
+            f"recall_at_{K}": r,
+            "delta_precision": p - alg_p,
+            "delta_recall": r - alg_r,
+        }
+        for name, _ in methods
+        for p, r in [results[name]]
+    ]
+    pd.DataFrame(method_rows).to_csv(output_dir / "method_comparison.csv", index=False)
+
+    pd.DataFrame(k_tuning_curve, columns=["k", "rmse"]).to_csv(
+        output_dir / "k_tuning.csv", index=False
+    )
+
+    if fa is not None:
+        pd.DataFrame([{
+            "n": fa["n"],
+            "spearman_r": fa["spearman_r"],
+            "spearman_p": fa["spearman_p"],
+            "pearson_r": fa["pearson_r"],
+            "pearson_p": fa["pearson_p"],
+        }]).to_csv(output_dir / "franchise_summary.csv", index=False)
+        fa["by_inst"].reset_index().to_csv(output_dir / "franchise_by_installment.csv", index=False)
+
+    if not corr.empty:
+        corr.to_csv(output_dir / "dialogue_correlation.csv", index=False)
+
+    print(f"  Saved CSVs to {output_dir}/")
+
+
+# Shared font sizes for evaluate.py's plots (kept larger than matplotlib
+# defaults so labels are readable at presentation size, not just on screen).
+PLOT_TITLE_FONT_SIZE = 26
+PLOT_LABEL_FONT_SIZE = 20
+PLOT_TICK_FONT_SIZE = 17
+PLOT_LEGEND_FONT_SIZE = 17
+PLOT_ANNOTATION_FONT_SIZE = 16
+
+
+def save_plots(
+    plots_dir: Path,
+    methods: list[tuple[str, object]],
+    results: dict[str, tuple[float, float]],
+    raw_results: dict[str, tuple[list[float], list[float]]],
+    k_tuning_curve: list[tuple[int, float]],
+    best_k: int,
+) -> None:
+    """Save a small set of diagnostic plots unique to this evaluation run:
+    method comparison (mean and full distribution) and the k-tuning curve.
+    These complement (but do not replace) the feature-correlation plots in
+    analyze_data.py."""
+    plt.rcParams.update({"figure.max_open_warning": 0})
+    names = [name for name, _ in methods]
+
+    # Precision@K / Recall@K by method (mean).
+    precisions = [results[name][0] for name in names]
+    recalls = [results[name][1] for name in names]
+    x = np.arange(len(names))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(11, 7))
+    ax.bar(x - width / 2, precisions, width, label=f"Precision@{K}", color="#4C72B0")
+    ax.bar(x + width / 2, recalls, width, label=f"Recall@{K}", color="#DD8452")
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, rotation=20, ha="right", fontsize=PLOT_TICK_FONT_SIZE)
+    ax.tick_params(axis="y", labelsize=PLOT_TICK_FONT_SIZE)
+    ax.set_ylabel("Score", fontsize=PLOT_LABEL_FONT_SIZE)
+    ax.set_title(f"Precision@{K} / Recall@{K} by Method", fontsize=PLOT_TITLE_FONT_SIZE)
+    ax.legend(fontsize=PLOT_LEGEND_FONT_SIZE)
+    fig.tight_layout()
+    fig.savefig(plots_dir / "precision_recall_by_method.png", dpi=150)
+    plt.close(fig)
+
+    # New: per-user Precision@K / Recall@K distribution by method, as heatmaps.
+    # Precision@K can only take K+1 discrete values (hits / K) and is heavily
+    # zero-inflated, so a boxplot collapses to a flat line at 0 with everything
+    # else drawn as "outlier" points, and grouped bars get busy with this many
+    # bins. A heatmap (methods x bins, color = % of users, annotated) reads the
+    # shape at a glance: hit-count for precision (exact, since hits = precision
+    # * K), and recall bucketed into ranges (recall's denominator varies per
+    # user, so it isn't as neatly discrete as precision).
+    heatmap_cmap = LinearSegmentedColormap.from_list("blues_seq", ["#FFFFFF", "#4C72B0"])
+
+    def draw_pct_heatmap(ax, data: np.ndarray, col_labels: list[str], title: str, xlabel: str) -> None:
+        im = ax.imshow(data, cmap=heatmap_cmap, vmin=0, vmax=100, aspect="auto")
+        ax.set_xticks(range(len(col_labels)))
+        ax.set_xticklabels(col_labels, fontsize=PLOT_TICK_FONT_SIZE)
+        ax.set_yticks(range(len(names)))
+        ax.set_yticklabels(names, fontsize=PLOT_TICK_FONT_SIZE)
+        ax.set_xlabel(xlabel, fontsize=PLOT_LABEL_FONT_SIZE)
+        ax.set_title(title, fontsize=PLOT_LABEL_FONT_SIZE)
+        for r in range(data.shape[0]):
+            for c in range(data.shape[1]):
+                value = data[r, c]
+                text_color = "white" if value > 55 else "#222222"
+                ax.text(c, r, f"{value:.0f}" if value >= 1 else ("<1" if value > 0 else "0"),
+                        ha="center", va="center", fontsize=PLOT_ANNOTATION_FONT_SIZE, color=text_color)
+        cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label("Users (%)", fontsize=PLOT_ANNOTATION_FONT_SIZE)
+        cbar.ax.tick_params(labelsize=PLOT_ANNOTATION_FONT_SIZE)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(19, 7.5))
+
+    hit_counts = list(range(0, K + 1))
+    hit_matrix = np.zeros((len(names), len(hit_counts)))
+    for i, name in enumerate(names):
+        p_list = np.asarray(raw_results[name][0])
+        hits = np.round(p_list * K).astype(int)
+        hit_matrix[i] = [np.mean(hits == h) * 100 for h in hit_counts]
+    draw_pct_heatmap(ax1, hit_matrix, [str(h) for h in hit_counts],
+                      f"Precision@{K}: Hit-Count Distribution", f"Relevant items found in top-{K}")
+
+    bin_edges = [-1e-9, 1e-9, 0.25, 0.5, 0.75, 1.0 + 1e-9]
+    bin_labels = ["0", "(0, .25]", "(.25, .5]", "(.5, .75]", "(.75, 1]"]
+    recall_matrix = np.zeros((len(names), len(bin_labels)))
+    for i, name in enumerate(names):
+        r_list = np.asarray(raw_results[name][1])
+        binned = pd.cut(r_list, bins=bin_edges, labels=bin_labels)
+        counts = binned.value_counts().reindex(bin_labels).to_numpy()
+        recall_matrix[i] = counts / len(r_list) * 100
+    draw_pct_heatmap(ax2, recall_matrix, bin_labels, f"Recall@{K}: Bucketed Distribution", f"Recall@{K}")
+
+    n_users = len(raw_results[names[0]][0])
+    fig.suptitle(f"Per-User Precision@{K} / Recall@{K} Distribution by Method ({n_users} users)",
+                 fontsize=PLOT_TITLE_FONT_SIZE)
+    fig.tight_layout()
+    fig.savefig(plots_dir / "precision_recall_distribution.png", dpi=150)
+    plt.close(fig)
+
+    # k-tuning RMSE curve, with the RMSE value annotated at each point.
+    ks = [k for k, _ in k_tuning_curve]
+    rmses = [rmse for _, rmse in k_tuning_curve]
+    fig, ax = plt.subplots(figsize=(11, 8))
+    ax.plot(ks, rmses, marker="o", markersize=9, linewidth=2, color="#4C72B0")
+    for k, rmse in k_tuning_curve:
+        ax.annotate(f"{rmse:.4f}", (k, rmse), textcoords="offset points", xytext=(0, 12),
+                    ha="center", fontsize=PLOT_ANNOTATION_FONT_SIZE)
+    best_rmse = dict(k_tuning_curve)[best_k]
+    ax.scatter([best_k], [best_rmse], color="#C44E52", s=120, zorder=5, label=f"Selected k={best_k}")
+    ax.set_xlabel("k (latent factors)", fontsize=PLOT_LABEL_FONT_SIZE)
+    ax.set_ylabel("RMSE", fontsize=PLOT_LABEL_FONT_SIZE)
+    ax.tick_params(axis="both", labelsize=PLOT_TICK_FONT_SIZE)
+    ax.set_title("SVD k-Tuning: RMSE vs. Number of Latent Factors", fontsize=PLOT_TITLE_FONT_SIZE)
+    ax.margins(y=0.15)
+    ax.legend(fontsize=PLOT_LEGEND_FONT_SIZE)
+    fig.tight_layout()
+    fig.savefig(plots_dir / "k_tuning_rmse.png", dpi=150)
+    plt.close(fig)
+
+    print(f"  Saved plots to {plots_dir}/")
+
+
+# ── Participant survey results ───────────────────────────────────────────────
+#
+# Separate from the offline metrics above: 15 participants each rated 3 movies
+# from each of the 4 methods (blinded) and ranked the 4 method-groups best (1)
+# to worst (4). This section is optional — it is skipped if the survey data in
+# survey-responses/ is not present.
+
+def load_survey_responses(path: Path = SURVEY_RESPONSES_PATH) -> pd.DataFrame:
+    df = pd.read_csv(path)
+    df["method"] = pd.Categorical(df["method"], categories=SURVEY_METHOD_ORDER, ordered=True)
+    return df
+
+
+def summarize_survey_responses(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Recompute the per-method survey summary from the raw responses.
+
+    Movie-level metrics (relevance, would-watch) are averaged over all rated
+    movies (3 per submission per method). Group-level metrics (rank, novelty)
+    are averaged once per submission/method, since they were only asked once
+    per group, not once per movie.
+    """
+    movie_level = df.groupby("method", observed=True).agg(
+        n_respondents=("submission_id", "nunique"),
+        n_movie_ratings=("submission_id", "size"),
+        avg_relevance=("relevance_1_5", "mean"),
+        std_relevance=("relevance_1_5", "std"),
+        avg_would_watch=("would_watch_1_5", "mean"),
+        std_would_watch=("would_watch_1_5", "std"),
+    )
+
+    group_level = (
+        df.drop_duplicates(subset=["submission_id", "method"])
+        .groupby("method", observed=True)
+        .agg(
+            avg_group_rank=("group_rank_1_best", "mean"),
+            std_group_rank=("group_rank_1_best", "std"),
+            avg_novelty=("group_novelty_1_5", "mean"),
+            std_novelty=("group_novelty_1_5", "std"),
+            ranked_1st_count=("group_rank_1_best", lambda s: int((s == 1).sum())),
+        )
+    )
+
+    summary = movie_level.join(group_level)
+    summary["main_score"] = (summary["avg_relevance"] + summary["avg_would_watch"]) / 2
+    return summary.loc[SURVEY_METHOD_ORDER]
+
+
+def survey_rank_distribution(df: pd.DataFrame) -> pd.DataFrame:
+    """Count how many times each method was ranked 1st..4th (1 = best)."""
+    group_level = df.drop_duplicates(subset=["submission_id", "method"])
+    counts = (
+        group_level.groupby(["method", "group_rank_1_best"], observed=True)
+        .size()
+        .unstack(fill_value=0)
+    )
+    for rank in (1, 2, 3, 4):
+        if rank not in counts.columns:
+            counts[rank] = 0
+    return counts.loc[SURVEY_METHOD_ORDER, [1, 2, 3, 4]]
+
+
+def cross_check_survey_summary(summary: pd.DataFrame, summary_path: Path = SURVEY_SUMMARY_PATH) -> None:
+    if not summary_path.exists():
+        return
+    existing = pd.read_csv(summary_path, encoding="utf-8-sig").set_index("method").loc[SURVEY_METHOD_ORDER]
+    cols = ["avg_relevance", "avg_would_watch", "main_score", "ranked_1st_count", "avg_novelty"]
+    diffs = (summary[cols] - existing[cols]).abs()
+    if (diffs.max() > 1e-6).any():
+        print("  WARNING: recomputed summary differs from results_by_method.csv:")
+        print(diffs[diffs.max(axis=1) > 1e-6])
+    else:
+        print("  Recomputed summary matches results_by_method.csv.")
+
+
+def save_survey_metrics_dashboard(summary: pd.DataFrame, plots_dir: Path) -> None:
+    """
+    One clustered bar chart: each of the four shared 1-5 scale metrics (relevance,
+    would-watch, novelty, main score) gets a group of four bars, one per method.
+    Avg. Rank and Times-Ranked-#1 are on different scales (1-4 and count-of-15)
+    and are already shown clearly in survey_rank_distribution.png, so they are
+    left out here rather than crammed into unrelated small subplots.
+    """
+    methods = list(summary.index)
+    colors = [SURVEY_METHOD_COLORS[m] for m in methods]
+
+    metrics = [
+        ("avg_relevance", "std_relevance", "Relevance"),
+        ("avg_would_watch", "std_would_watch", "Would-Watch"),
+        ("avg_novelty", "std_novelty", "Novelty"),
+        ("main_score", None, "Main Score"),
+    ]
+    metric_labels = [label for _, _, label in metrics]
+
+    n_methods = len(methods)
+    bar_width = 0.8 / n_methods
+    x = np.arange(len(metrics))
+
+    fig, ax = plt.subplots(figsize=(13, 8))
+    for i, (method, color) in enumerate(zip(methods, colors)):
+        values = [summary.loc[method, col] for col, _, _ in metrics]
+        errs = [summary.loc[method, err_col] if err_col else 0.0 for _, err_col, _ in metrics]
+        offset = (i - (n_methods - 1) / 2) * bar_width
+        bars = ax.bar(x + offset, values, bar_width, yerr=errs, capsize=4,
+                       label=SURVEY_METHOD_LABELS[method], color=color)
+        for bar, v in zip(bars, values):
+            ax.text(bar.get_x() + bar.get_width() / 2, 0.1, f"{v:.2f}",
+                    ha="center", va="bottom", fontsize=PLOT_ANNOTATION_FONT_SIZE,
+                    color="white", fontweight="bold")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(metric_labels, fontsize=PLOT_TICK_FONT_SIZE)
+    ax.tick_params(axis="y", labelsize=PLOT_TICK_FONT_SIZE)
+    ax.set_ylabel("Score (1-5)", fontsize=PLOT_LABEL_FONT_SIZE)
+    ax.set_title("Participant Survey Results by Method (n = 15 respondents)", fontsize=PLOT_TITLE_FONT_SIZE)
+    ax.legend(fontsize=PLOT_LEGEND_FONT_SIZE)
+    fig.tight_layout()
+    fig.savefig(plots_dir / "survey_metrics_by_method.png", dpi=150)
+    plt.close(fig)
+
+
+def save_survey_rank_distribution(counts: pd.DataFrame, plots_dir: Path) -> None:
+    # Sort methods by their actual average rank (best to worst), rather than
+    # relying on SURVEY_METHOD_ORDER already happening to be in that order.
+    n_respondents = counts.sum(axis=1)
+    avg_rank = (counts[1] * 1 + counts[2] * 2 + counts[3] * 3 + counts[4] * 4) / n_respondents
+    counts = counts.loc[avg_rank.sort_values().index]
+
+    names = [SURVEY_METHOD_LABELS[m] for m in counts.index]
+    rank_colors = {1: "#2E7D32", 2: "#9CCC65", 3: "#FFB74D", 4: "#E53935"}  # best (1) -> worst (4)
+
+    fig, ax = plt.subplots(figsize=(11, 8))
+    bottom = np.zeros(len(counts))
+    # Stack rank 4 first (bottom) up to rank 1 (top), so "Ranked 1" reads at
+    # the top of each bar and "Ranked 4" at the bottom.
+    for rank in (4, 3, 2, 1):
+        color = rank_colors[rank]
+        values = counts[rank].to_numpy(dtype=float)
+        bars = ax.bar(names, values, bottom=bottom, color=color, label=f"Ranked {rank}")
+        for bar, v in zip(bars, values):
+            if v > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + v / 2, int(v),
+                        ha="center", va="center", fontsize=PLOT_ANNOTATION_FONT_SIZE, color="white",
+                        fontweight="bold")
+        bottom += values
+
+    ax.set_xticks(range(len(names)))
+    ax.set_xticklabels(names, rotation=20, ha="right", fontsize=PLOT_TICK_FONT_SIZE)
+    ax.tick_params(axis="y", labelsize=PLOT_TICK_FONT_SIZE)
+    ax.set_ylabel("Number of respondents (of 15)", fontsize=PLOT_LABEL_FONT_SIZE)
+    ax.set_title("How Often Each Method Was Ranked 1st-4th", fontsize=PLOT_TITLE_FONT_SIZE)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles[::-1], labels[::-1], fontsize=PLOT_LEGEND_FONT_SIZE,
+              bbox_to_anchor=(1.02, 1), loc="upper left")
+    fig.tight_layout()
+    fig.savefig(plots_dir / "survey_rank_distribution.png", dpi=150)
+    plt.close(fig)
+
+
+def save_survey_rating_distribution(df: pd.DataFrame, plots_dir: Path) -> None:
+    """
+    Shaded-line (line + filled area) chart of the rating distribution shape per
+    method, replacing boxplots: ratings are integers 1-5, so a box-and-whisker
+    summary hides the actual shape (e.g. how bimodal or concentrated it is).
+    Plotting % of ratings at each value as a line with a shaded area under it
+    shows that shape directly and makes the four methods easy to compare.
+    """
+    scale = [1, 2, 3, 4, 5]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    for ax, col, title in (
+        (ax1, "relevance_1_5", "Relevance (1-5)"),
+        (ax2, "would_watch_1_5", "Would-Watch (1-5)"),
+    ):
+        for method in SURVEY_METHOD_ORDER:
+            values = df.loc[df["method"] == method, col].to_numpy()
+            pct = np.array([np.mean(values == v) for v in scale]) * 100
+            color = SURVEY_METHOD_COLORS[method]
+            ax.plot(scale, pct, marker="o", markersize=9, linewidth=2.5,
+                    color=color, label=SURVEY_METHOD_LABELS[method])
+            ax.fill_between(scale, pct, color=color, alpha=0.15)
+        ax.set_xticks(scale)
+        ax.tick_params(axis="both", labelsize=PLOT_TICK_FONT_SIZE)
+        ax.set_xlabel(title, fontsize=PLOT_LABEL_FONT_SIZE)
+        ax.set_ylabel("Ratings (%)", fontsize=PLOT_LABEL_FONT_SIZE)
+        ax.margins(y=0.1)
+        ax.legend(fontsize=PLOT_ANNOTATION_FONT_SIZE)
+
+    fig.suptitle("Per-Movie Rating Distribution by Method (45 ratings/method)", fontsize=PLOT_TITLE_FONT_SIZE)
+    fig.tight_layout()
+    fig.savefig(plots_dir / "survey_rating_distribution.png", dpi=150)
+    plt.close(fig)
+
+
+def save_survey_results(plots_dir: Path, responses_path: Path = SURVEY_RESPONSES_PATH) -> None:
+    """Load, print, and plot the participant survey results, if present."""
+    if not responses_path.exists():
+        print(f"  {responses_path} not found; skipping survey results.")
+        return
+
+    df = load_survey_responses(responses_path)
+    summary = summarize_survey_responses(df)
+    counts = survey_rank_distribution(df)
+
+    print("  Summary by method:")
+    print(summary.round(3).to_string())
+    print()
+    print("  Rank distribution (rows = method, columns = rank 1..4):")
+    print(counts.to_string())
+    cross_check_survey_summary(summary)
+
+    save_survey_metrics_dashboard(summary, plots_dir)
+    save_survey_rank_distribution(counts, plots_dir)
+    save_survey_rating_distribution(df, plots_dir)
+    print(f"  Saved survey plots to {plots_dir}/")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def _comparison_word(svd_p: float, svd_r: float, bp: float, br: float) -> str:
@@ -623,6 +1081,20 @@ def _ranking_quality_word(precision: float, recall: float) -> str:
 
 
 def main() -> None:
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    PLOTS_DIR.mkdir(exist_ok=True)
+    log_path = OUTPUT_DIR / "evaluate_log.txt"
+    log_file = open(log_path, "w")
+    original_stdout = sys.stdout
+    sys.stdout = _Tee(original_stdout, log_file)
+    try:
+        _run(log_path)
+    finally:
+        sys.stdout = original_stdout
+        log_file.close()
+
+
+def _run(log_path: Path) -> None:
     if not RATINGS_AND_TAGS_PATH.exists():
         print(f"ERROR: {RATINGS_AND_TAGS_PATH} not found — run main.py first.")
         return
@@ -659,7 +1131,7 @@ def main() -> None:
     print(f"  Metadata movies without model factors: {len(metadata_movie_ids - model_movie_ids):,}")
     print(f"  SVD setup completed in {time.time() - t0:.1f}s")
     print("  Selecting k:")
-    best_k = tune_k(model, test)
+    best_k, k_tuning_curve = tune_k(model, test)
     print(f"  Selected k: {best_k}")
 
     # Keep the selected SVD dimensions for the shared recommendations_algorithm function.
@@ -677,6 +1149,7 @@ def main() -> None:
 
     dq_map = load_dialogue_features()
     franchise_map = load_franchise_map()
+    installment_trend = load_installment_rating_trend()
 
     alg_rec = algorithm_recommender(
         movies,
@@ -685,6 +1158,7 @@ def main() -> None:
         train_input_movies,
         dq_map,
         franchise_map,
+        installment_trend,
         top_n=K,
     )
     pop_rec = popular_recommender(train, train_movies, top_n=K, allowed_movie_ids=allowed_movie_ids)
@@ -701,8 +1175,11 @@ def main() -> None:
     ]
 
     results: dict[str, tuple[float, float]] = {}
+    raw_results: dict[str, tuple[list[float], list[float]]] = {}
     for name, rec_fn in methods:
-        results[name] = eval_ranking(rec_fn, relevant_by_user, eval_user_ids, k=K)
+        p_mean, r_mean, p_list, r_list = eval_ranking(rec_fn, relevant_by_user, eval_user_ids, k=K)
+        results[name] = (p_mean, r_mean)
+        raw_results[name] = (p_list, r_list)
 
     alg_p, alg_r = results["Recommendations algorithm"]
 
@@ -755,6 +1232,29 @@ def main() -> None:
         print(f"  Spearman rho: {top['spearman_r']:+.4f}")
         print(f"  Spearman p: {top['spearman_p']:.4f}")
     print()
+
+    save_results_csv(
+        OUTPUT_DIR,
+        svd_rmse,
+        mean_rmse,
+        n_eval,
+        best_k,
+        eval_user_ids,
+        allowed_movie_ids,
+        metadata_movie_ids,
+        model_movie_ids,
+        methods,
+        results,
+        k_tuning_curve,
+        fa,
+        corr,
+    )
+    save_plots(PLOTS_DIR, methods, results, raw_results, k_tuning_curve, best_k)
+
+    section("Participant survey results")
+    save_survey_results(PLOTS_DIR)
+
+    print(f"\n  Saved full log to {log_path}")
 
 
 if __name__ == "__main__":
