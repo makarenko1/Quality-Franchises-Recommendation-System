@@ -104,12 +104,6 @@ function escapeHtml(s) {
 function onSelectionChanged() {
   const chosen = selected.filter(Boolean);
 
-  // Pills
-  const pillsEl = document.getElementById("pills");
-  pillsEl.innerHTML = chosen
-    .map((m) => `<span class="selected-pill"><span class="pill-dot"></span>${escapeHtml(m.title)}</span>`)
-    .join("");
-
   // Preview cards
   const cardsEl = document.getElementById("selected-cards");
   cardsEl.innerHTML = chosen.map((m, i) => movieCardHtml(m, `Pick #${i + 1}`)).join("");

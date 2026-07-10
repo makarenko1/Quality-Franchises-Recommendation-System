@@ -118,26 +118,6 @@ body {
 }
 .picker-result-item:hover { background: #f5f0ea; }
 
-/* Selected pills */
-.pills { margin-top: 0.8rem; }
-.selected-pill {
-  display: inline-flex;
-  align-items: center;
-  background: #fff;
-  border: 1px solid #c9a96e;
-  border-radius: 20px;
-  padding: 4px 14px;
-  margin: 4px;
-  font-size: 0.83rem;
-  color: #1a1a1a;
-}
-.selected-pill .pill-dot {
-  width: 7px; height: 7px;
-  background: #c9a96e;
-  border-radius: 50%;
-  margin-right: 7px;
-}
-
 /* Movie card */
 .card-row {
   display: grid;
