@@ -21,7 +21,7 @@ The recommender combines five signals:
 4. **Franchise awareness** — franchise membership, installment number, IMDb rating
 5. **Old-movie penalty** — corrects IMDb's bias toward older, highly-rated films
 
-Every entry point (CLI, Streamlit app, evaluation, participant survey) scores through the same code path in `recommendations_algorithm.py`, so all of them rank the same `dataset.csv` movie universe the same way.
+Every entry point (CLI, web app, evaluation, participant survey) scores through the same code path in `recommendations_algorithm.py`, so all of them rank the same `dataset.csv` movie universe the same way.
 
 ---
 
@@ -49,7 +49,7 @@ A final lightweight post-filter removes clearly unsuitable candidates — stand-
 
 ```bash
 git clone <repo-url> && cd Quality-Franchises-Recommendation-System
-pip install -r requirements.txt   # pandas, numpy, scipy, streamlit, matplotlib, nltk, gdown
+pip install -r requirements.txt   # pandas, numpy, scipy, matplotlib, nltk, gdown
 ./setup.sh                        # downloads large data files (not stored in Git)
 ```
 
@@ -61,7 +61,7 @@ pip install -r requirements.txt   # pandas, numpy, scipy, streamlit, matplotlib,
 |---|---|---|
 | Build datasets | `python main.py` | Builds `dataset.csv` and `dataset_ratings_and_tags.csv` from MovieLens/IMDb/OpenSubtitles/franchise data |
 | Run recommender (CLI) | `python recommendations_algorithm.py` | Prompts for 3 movies, prints ranked recommendations |
-| Run recommender (web) | `streamlit run app.py` | Same scoring path, browser UI |
+| Run recommender (web) | see [`recommender-web-code/`](recommender-web-code/) | Static frontend + Python API, same scoring path, free to deploy on Vercel |
 | Baselines | `python generate_recommendations.py --interactive` | Popular / highest-rated (Bayesian) / random, interactively |
 | Evaluate | `python evaluate.py` | RMSE, Precision@10/Recall@10 vs. baselines, franchise/dialogue diagnostics |
 | Analyze features | `python analyze_data.py` | Franchise/dialogue correlation analysis → `analysis_outputs/` |
@@ -157,11 +157,12 @@ Note: `franchise_installment_mean_rating.png`, `imdb_rating_by_decade_genre_heat
 ├── recommendations_algorithm.py   # Final recommender, shared by every entry point below
 ├── evaluate.py                    # Offline evaluation (RMSE, Precision@K/Recall@K, diagnostics)
 ├── generate_recommendations.py    # Builds the participant recommendation table; --interactive queries baselines from the CLI
-├── app.py                         # Streamlit web app
 ├── analyze_data.py                # Franchise and dialogue correlation analysis
 ├── setup.sh                       # Downloads large data files
 ├── dataset.csv                    # Movie-level dataset
 ├── dataset_ratings_and_tags.csv   # Combined ratings/tags interaction dataset
+├── recommender-web-code/          # Static frontend + Python API (Vercel-deployable web app);
+│                                 # see its own README for setup/deploy
 ├── survey-responses/              # Collected participant survey responses
 └── datasets/
     ├── movies-1M/                 # MovieLens 1M processed files
@@ -195,6 +196,7 @@ Typical workflow:
 python main.py
 python analyze_data.py
 python evaluate.py
-streamlit run app.py
 python generate_recommendations.py   # participant follow-up recommendations
 ```
+
+For the web app, see [`recommender-web-code/README.md`](recommender-web-code/README.md).

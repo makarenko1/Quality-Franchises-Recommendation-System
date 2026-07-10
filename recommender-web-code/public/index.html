@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Movie Recommender</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page">
+    <div class="hero-wrap">
+      <div class="hero-title">🎬 Movie <span>Recommender</span></div>
+      <div class="hero-sub">Tell us what you love and we'll find your next watch</div>
+    </div>
+
+    <div class="section-header">Pick 3 Movies You Love</div>
+    <div class="picker-row" id="picker-row"></div>
+    <div class="pills" id="pills"></div>
+    <div class="card-row" id="selected-cards"></div>
+
+    <hr class="custom-divider" />
+
+    <div class="section-header">Suggested for You</div>
+    <p id="suggested-note" class="suggested-note">Pick 3 movies above to get personalized suggestions.</p>
+    <div class="card-row" id="suggested-cards"></div>
+
+    <div class="footer-note">
+      Suggestions use the SVD + dialogue quality + franchise-aware recommender.
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
