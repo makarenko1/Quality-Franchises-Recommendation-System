@@ -77,28 +77,28 @@ Input: a cleaned spreadsheet `recommendations_initial.xlsx` (sheet `initial_rati
 
 ## Evaluation Results
 
-`evaluate.py` splits `dataset_ratings_and_tags.csv` into train/held-out test sets, fits a biased SVD (tuning k), and reports RMSE, Precision@10/Recall@10 against popular/highest-rated/random baselines plus franchise and dialogue diagnostics — using the same `recommend_from_movie_ids()` path as the main recommender. It then also loads the participant survey data in `survey-responses/` (if present) and produces the survey plots described [below](#participant-survey-results), all in one run.
+`evaluate.py` splits `dataset_ratings_and_tags.csv` into train/held-out test sets, fits a biased SVD (tuning k), and reports RMSE against a ladder of rating-prediction baselines (bias-only, item-mean, user-mean, global-mean) plus Precision@10/Recall@10 against popular/highest-rated/random ranking baselines, plus franchise and dialogue diagnostics — using the same `recommend_from_movie_ids()` path as the main recommender. RMSE and Precision/Recall use different baseline families because they test different things: RMSE needs a predicted rating, so it only applies to methods that predict one; Precision/Recall only need a ranked list, so they apply to every method (see the comment above `compute_rmse()` in `evaluate.py`). It then also loads the participant survey data in `survey-responses/` (if present) and produces the survey plots described [below](#participant-survey-results), all in one run.
 
-Current result, with both milestone refinements enabled (default):
+Current result (5,000 sampled ranking users, of ~204k eligible; `EVAL_USER_SAMPLE_SIZE` in `evaluate.py`), with both milestone refinements enabled (default):
 
 | Metric | Result |
 |---|---|
-| RMSE | 0.8422 (vs. 1.0603 global-mean baseline) |
-| Precision@10 | 0.0632 |
-| Recall@10 | 0.0544 |
+| RMSE | 0.8422 (bias-only 0.8799, user-mean 0.9488, item-mean 0.9606, global-mean 1.0603) |
+| Precision@10 | 0.0561 |
+| Recall@10 | 0.0512 |
 
 | Method | Precision@10 | Recall@10 |
 |---|---:|---:|
-| Recommendations algorithm | 0.0632 | 0.0544 |
-| Popular | 0.1162 | 0.0920 |
-| Highest-rated | 0.0492 | 0.0440 |
-| Random | 0.0000 | 0.0000 |
+| Our system | 0.0561 | 0.0512 |
+| Popular | 0.1201 | 0.1002 |
+| Highest-rated | 0.0472 | 0.0416 |
+| Random | 0.0002 | 0.0001 |
 
 The popular baseline remains strongest, which is expected in MovieLens held-out evaluation since universally-watched movies appear in many users' test sets. The model is more novel than popularity because it combines collaborative filtering with dialogue quality, franchise quality, an old-movie penalty, and a post-filter.
 
-**Ablation — grouped vs. global dialogue normalization:** run on the same split with `USE_GROUPED_DIALOGUE_NORMALIZATION=1` vs. `=0`. Global: 0.0624 / 0.0522. Grouped: 0.0632 / 0.0544 (+0.0008 / +0.0022) — a small, consistent gain, supporting the idea of comparing dialogue features to era/genre peers rather than the whole catalog.
+**Ablation — grouped vs. global dialogue normalization:** run on the same split with `USE_GROUPED_DIALOGUE_NORMALIZATION=1` vs. `=0`. Global: 0.0624 / 0.0522. Grouped: 0.0632 / 0.0544 (+0.0008 / +0.0022) — a small, consistent gain, supporting the idea of comparing dialogue features to era/genre peers rather than the whole catalog. *(Measured on an earlier 500-user sample; not rechecked at the current 5,000-user sample size, though the relative comparison should still hold.)*
 
-**Ablation — graded vs. flat installment penalty:** run with `USE_INSTALLMENT_SHRINKAGE=1` vs. `=0`. Both gave identical 0.0632 / 0.0544. Franchise quality is only a 0.05 weight, and the penalty only applies to same-franchise, later-installment candidates — too narrow a lever to move this 500-user sample. Kept as the default for being better-calibrated (it stops over-trusting sparse high-installment data), not for a measured lift.
+**Ablation — graded vs. flat installment penalty:** run with `USE_INSTALLMENT_SHRINKAGE=1` vs. `=0`. Both gave identical 0.0632 / 0.0544. Franchise quality is only a 0.05 weight, and the penalty only applies to same-franchise, later-installment candidates — too narrow a lever to move this sample. Kept as the default for being better-calibrated (it stops over-trusting sparse high-installment data), not for a measured lift. *(Also measured on the earlier 500-user sample.)*
 
 Supporting analysis: franchise installment vs. IMDb rating, Spearman ρ = -0.2985; top dialogue feature `negative_word_ratio` vs. IMDb rating, Spearman ρ = -0.1613.
 
@@ -122,23 +122,30 @@ Every `python evaluate.py` run overwrites `evaluation_outputs/`:
 ```text
 evaluation_outputs/
 ├── evaluate_log.txt                  # full console output of the run
-├── summary_metrics.csv               # RMSE, Precision@10/Recall@10, dataset sizes
+├── summary_metrics.csv               # RMSE (svd/bias-only/item-mean/user-mean/global-mean),
+│                                     # Precision@10/Recall@10, dataset sizes
 ├── method_comparison.csv             # Precision@10/Recall@10 per method
 ├── k_tuning.csv                      # RMSE at each candidate k
 ├── franchise_summary.csv             # franchise installment vs. rating correlation
 ├── franchise_by_installment.csv      # mean rating / count / std per installment bucket
 ├── dialogue_correlation.csv          # per-feature correlation with IMDb rating
 └── plots/
+    ├── overall_metrics_comparison.png       # RMSE (all baselines) + Precision@10 + Recall@10,
+    │                                        # side by side
     ├── precision_recall_by_method.png       # Precision@10/Recall@10 mean, by method
-    ├── precision_recall_distribution.png    # same, but the full per-user distribution
+    ├── precision_recall_distribution.png    # per-user outcome buckets (0/1/2+ relevant picks,
+    │                                        # none/some/all liked movies found)
     ├── k_tuning_rmse.png                    # RMSE vs. k, with the selected k marked
-    ├── franchise_rating_by_installment.png  # mean rating ± std per installment bucket
-    ├── survey_metrics_by_method.png         # 6-panel dashboard: relevance, would-watch,
-    │                                        # main score, novelty, avg. rank, times ranked #1
+    ├── survey_metrics_by_method.png         # clustered bars: relevance, would-watch,
+    │                                        # novelty, main score, by method
     ├── survey_rank_distribution.png         # stacked bars: how often each method was
     │                                        # ranked 1st..4th
-    └── survey_rating_distribution.png       # per-movie relevance/would-watch spread, box plots
+    ├── survey_rating_distribution.png       # per-movie relevance/would-watch distribution shape
+    ├── survey_relevance_vs_would_watch.png  # small-multiple heatmaps: do the two ratings agree?
+    └── survey_novelty_vs_relevance.png      # accuracy-vs-diversity trade-off, mean ± std by method
 ```
+
+Note: `franchise_installment_mean_rating.png`, `imdb_rating_by_decade_genre_heatmap.png`, and `rating_dialogue_control_correlations.png` are produced separately by `analyze_data.py` into `analysis_outputs/`, not by `evaluate.py`.
 
 ---
 
