@@ -13,7 +13,7 @@
   Candidate movies: 74,038
   Model movies without metadata: 0
   Metadata movies without model factors: 6,249
-  SVD setup completed in 7.5s
+  SVD setup completed in 7.9s
   Selecting k:
   k            RMSE
   ------------------
@@ -25,7 +25,7 @@
 Loading dialogue features from dataset...
   Grouped dialogue normalization: decade x genre (min group size = 30).
   Scoring ranking metrics for 5,000 sampled users (of 204,233 eligible) x 4 methods ...
-  Ranking evaluation completed in 505.5s
+  Ranking evaluation completed in 540.4s
 
 Recommender system performance:
   RMSE (svd): 0.8422
@@ -44,10 +44,10 @@ Recommender system performance:
 
   Method                       Precision@10    Recall@10    Delta P    Delta R
   ------------------------------------------------------------------------------
-  Our system                         0.0561       0.0512    +0.0000    +0.0000
-  Popular                            0.1201       0.1002    +0.0640    +0.0490
-  Highest-rated                      0.0472       0.0416    -0.0089    -0.0096
-  Random                             0.0002       0.0001    -0.0559    -0.0511
+  Our system                         0.0570       0.0522    +0.0000    +0.0000
+  Popular                            0.1201       0.1002    +0.0631    +0.0480
+  Highest-rated                      0.0472       0.0416    -0.0098    -0.0106
+  Random                             0.0002       0.0001    -0.0568    -0.0521
 Franchise analysis:
   Franchise n: 1,736
   Spearman rho: -0.2985

@@ -19,7 +19,7 @@ The recommender combines five signals:
 2. **Item-quality prior** — popularity + Bayesian-weighted rating quality
 3. **Dialogue quality** — subtitle-derived language features
 4. **Franchise awareness** — franchise membership, installment number, IMDb rating
-5. **Old-movie penalty** — corrects IMDb's bias toward older, highly-rated films
+5. **Old-movie penalty** — a small, Year-based (not IMDb-based) discount against older movies
 
 Every entry point (CLI, web app, evaluation, participant survey) scores through the same code path in `recommendations_algorithm.py`, so all of them rank the same `dataset.csv` movie universe the same way.
 
@@ -32,7 +32,7 @@ Every entry point (CLI, web app, evaluation, participant survey) scores through 
 | Collaborative / quality score | 0.75 | Latent similarity (0.60) + item-quality prior (0.40) |
 | Dialogue / language quality | 0.15 | Subtitle-derived language features |
 | Franchise quality | 0.05 | Rewards maintained quality, penalizes weaker later installments |
-| Old-movie penalty | -0.05 | Pushes older movies down; never boosts newer ones |
+| Old-movie penalty | -0.02 | Pushes older movies down; never boosts newer ones |
 
 The item-quality prior is popularity (0.60) + rating quality (0.40). Dialogue quality is a weighted composite of 5 subtitle features (`negative_word_ratio` -0.35, `type_token_ratio` +0.25, `hapax_ratio` +0.15, `repeated_short_phrase_ratio` -0.15, `bigram_repetition_ratio` -0.10), compared against the average of the user's input movies — so it's part of the personalized ranking, not just a global filter.
 
@@ -64,6 +64,7 @@ pip install -r requirements.txt   # pandas, numpy, scipy, matplotlib, nltk, gdow
 | Run recommender (web) | see [`recommender-web-code/`](recommender-web-code/) | Static frontend + Python API, same scoring path, free to deploy on Vercel |
 | Baselines | `python generate_recommendations.py --interactive` | Popular / highest-rated (Bayesian) / random, interactively |
 | Evaluate | `python evaluate.py` | RMSE, Precision@10/Recall@10 vs. baselines, franchise/dialogue diagnostics |
+| Weight sensitivity | `python evaluate.py --weight-sensitivity` | Sweeps each scoring weight, plots Precision@10/Recall@10 vs. each — see [below](#weight-sensitivity) |
 | Analyze features | `python analyze_data.py` | Franchise/dialogue correlation analysis → `analysis_outputs/` |
 | Build participant recs | `python generate_recommendations.py` | See [below](#participant-recommendation-survey) |
 
@@ -100,7 +101,21 @@ The popular baseline remains strongest, which is expected in MovieLens held-out 
 
 **Ablation — graded vs. flat installment penalty:** run with `USE_INSTALLMENT_SHRINKAGE=1` vs. `=0`. Both gave identical 0.0632 / 0.0544. Franchise quality is only a 0.05 weight, and the penalty only applies to same-franchise, later-installment candidates — too narrow a lever to move this sample. Kept as the default for being better-calibrated (it stops over-trusting sparse high-installment data), not for a measured lift. *(Also measured on the earlier 500-user sample.)*
 
-Supporting analysis: franchise installment vs. IMDb rating, Spearman ρ = -0.2985; top dialogue feature `negative_word_ratio` vs. IMDb rating, Spearman ρ = -0.1613.
+Supporting analysis: franchise installment vs. IMDb rating, Spearman ρ = -0.2985; top dialogue feature `negative_word_ratio` vs. IMDb rating, Spearman ρ = -0.1613. Unlike IMDb rating, no dialogue feature (out of all 46 checked, including the 5 used in `DIALOGUE_FEATURE_WEIGHTS`) shows a comparable trend against franchise installment number — the strongest is only ρ ≈ ±0.08 — so franchise "fatigue" does not show up measurably in subtitle language, only in rating.
+
+### Weight sensitivity
+
+`python evaluate.py --weight-sensitivity` sweeps each top-level scoring weight (`W_CF`, `W_DIALOGUE`, `W_FRANCHISE`, `W_YEAR_PENALTY`) one at a time — rescaling the other three to keep their relative proportions while the four still sum to 1 — and re-measures Precision@10/Recall@10 at each point, instead of only asserting the weight choice in prose. It also sweeps the two largest-magnitude features inside the dialogue composite (`negative_word_ratio`, `type_token_ratio`) the same way, across both signs. Run on a 2M-row ratings sample / 750 sampled users (`--rows` / `--users` to change), producing `evaluation_outputs/weight_sensitivity.csv`, `evaluation_outputs/dialogue_weight_sensitivity.csv`, and `evaluation_outputs/plots/weight_sensitivity.png`.
+
+Findings:
+
+- **`W_CF`** (0.75): precision/recall rise sharply from 0 to ~0.8, then plateau — the default sits right on the plateau, near-optimal.
+- **`W_DIALOGUE`** (0.15): flat through ~0.6, then drops off sharply above 0.8 — the default is safely inside the flat region.
+- **`W_FRANCHISE`** (0.05): essentially flat across the full 0–0.95 range — the model is insensitive to this weight, so the default is as good as any other value here.
+- **`W_YEAR_PENALTY`**: both metrics decline monotonically as the penalty grows, with no local optimum away from 0 — this is what motivated lowering it from 0.05 to 0.02 (see below).
+- **`negative_word_ratio` / `type_token_ratio`** (dialogue composite): both curves are close to flat across their full signed range — the model is far more sensitive to *whether* dialogue quality is used (`W_DIALOGUE`) than to the internal balance between these two features.
+
+**Old-movie penalty follow-up:** since the sweep alone can't say whether lowering `W_YEAR_PENALTY` actually surfaces much older movies in practice (Precision/Recall only measure overlap with what MovieLens users already rated, not perceived quality of a fresh suggestion), a direct before/after check compared the release-year distribution of top-10 recommendations for the same 750 users at `W_YEAR_PENALTY=0.05` vs. `0.0`. Removing it shifted the mean recommended year from 1995.0 to 1991.4 (+5-8pp share before 1980), while 88.5% of distinct recommended movies stayed the same — a real but bounded shift, not a flood of decades-old titles. Based on this, `W_YEAR_PENALTY` was lowered to 0.02 (from 0.05) rather than removed outright, trading most of the offline-metric gain for a smaller age shift than fully zeroing it out.
 
 ### Participant survey results
 
@@ -131,8 +146,7 @@ evaluation_outputs/
 ├── dialogue_correlation.csv          # per-feature correlation with IMDb rating
 └── plots/
     ├── overall_metrics_comparison.png       # RMSE (all baselines) + Precision@10 + Recall@10,
-    │                                        # side by side
-    ├── precision_recall_by_method.png       # Precision@10/Recall@10 mean, by method
+    │                                        # side by side (includes the by-method mean)
     ├── precision_recall_distribution.png    # per-user outcome buckets (0/1/2+ relevant picks,
     │                                        # none/some/all liked movies found)
     ├── k_tuning_rmse.png                    # RMSE vs. k, with the selected k marked
@@ -145,7 +159,9 @@ evaluation_outputs/
     └── survey_novelty_vs_relevance.png      # accuracy-vs-diversity trade-off, mean ± std by method
 ```
 
-Note: `franchise_installment_mean_rating.png`, `imdb_rating_by_decade_genre_heatmap.png`, and `rating_dialogue_control_correlations.png` are produced separately by `analyze_data.py` into `analysis_outputs/`, not by `evaluate.py`.
+`python evaluate.py --weight-sensitivity` (see [Weight sensitivity](#weight-sensitivity)) additionally saves `evaluation_outputs/weight_sensitivity.csv`, `evaluation_outputs/dialogue_weight_sensitivity.csv`, and `evaluation_outputs/plots/weight_sensitivity.png`, without touching the files above.
+
+Note: `franchise_installment_mean_rating.png`, `imdb_rating_by_decade_genre_heatmap.png`, `negative_word_ratio_by_decade_genre_heatmap.png`, `rating_dialogue_control_correlations.png` (now Spearman-based), `dialogue_feature_correlations_imdb_rating_heatmap.png` (all 46 dialogue features vs. IMDb rating), `dialogue_feature_correlations_installment_heatmap.png` (same 46 features vs. franchise installment number), and `recommender_dialogue_features_by_installment.png` (just the 5 features actually used in `DIALOGUE_FEATURE_WEIGHTS`, by franchise installment) are produced separately by `analyze_data.py` into `analysis_outputs/`, not by `evaluate.py`.
 
 ---
 

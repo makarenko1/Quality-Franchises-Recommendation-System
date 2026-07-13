@@ -10,10 +10,16 @@ Sections:
 
 Uses dataset_ratings_and_tags.csv which contains both MovieLens 1M and 32M
 ratings. 32M UserIDs are offset by USER_ID_32M_OFFSET to avoid collisions.
+
+Run with --weight-sensitivity to instead sweep the top-level scoring weights
+(W_CF, W_DIALOGUE, W_FRANCHISE, W_YEAR_PENALTY) and plot Precision@K/Recall@K
+against each, on a smaller/faster sample than the full run above (see
+--rows / --users / --weights).
 """
 
 from __future__ import annotations
 
+import argparse
 import gc
 import sys
 import time
@@ -29,6 +35,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import svds
 from scipy.stats import pearsonr, spearmanr
 
+import recommendations_algorithm as ra
 from recommendations_algorithm import (
     MOVIES_PATH,
     load_movies_metadata,
@@ -96,6 +103,47 @@ READ_CHUNK_SIZE     = 500_000    # read the combined ratings file incrementally
 # Ranking metrics are evaluated on a fixed user sample because scoring every
 # user against every movie is expensive even without building a full matrix.
 EVAL_USER_SAMPLE_SIZE = 5000
+
+# --- Weight sensitivity sweep (--weight-sensitivity) ---
+# Smaller/faster sample than the full run above: the sweep reruns ranking
+# evaluation once per grid point (~24 times total for the 4 weights below).
+WEIGHT_SENSITIVITY_MAX_ROWS = 2_000_000   # pass --rows 0 for the full file
+WEIGHT_SENSITIVITY_USER_SAMPLE = 300
+WEIGHT_SENSITIVITY_SVD_K = 50              # fixed k; skips k-tuning
+
+BASE_WEIGHTS = {
+    "W_CF": ra.W_CF,
+    "W_DIALOGUE": ra.W_DIALOGUE,
+    "W_FRANCHISE": ra.W_FRANCHISE,
+    "W_YEAR_PENALTY": ra.W_YEAR_PENALTY,
+}
+WEIGHT_GRID = [0.0, 0.2, 0.4, 0.6, 0.8, 0.95]
+WEIGHT_LABELS = {
+    "W_CF": "Collaborative filtering weight",
+    "W_DIALOGUE": "Dialogue-quality weight",
+    "W_FRANCHISE": "Franchise-quality weight",
+    "W_YEAR_PENALTY": "Old-movie penalty weight",
+}
+
+# The two largest-magnitude features inside DIALOGUE_FEATURE_WEIGHTS (the
+# composite that feeds W_DIALOGUE); swept the same way, but by rescaling
+# feature-weight *magnitudes* since these weights carry signs.
+DIALOGUE_SWEEP_FEATURES = ["negative_word_ratio", "type_token_ratio"]
+BASE_DIALOGUE_WEIGHTS = dict(ra.DIALOGUE_FEATURE_WEIGHTS)
+DIALOGUE_WEIGHT_LABELS = {
+    "negative_word_ratio": "Negative-word-ratio weight",
+    "type_token_ratio": "Type-token-ratio weight",
+}
+
+# negative_word_ratio's baseline sign is negative (it penalizes); sweep both
+# signs for it to check whether flipping it to reward negative dialogue would
+# actually help. type_token_ratio's baseline sign is already positive, so its
+# sweep only needs to explore magnitude, not the opposite sign.
+DIALOGUE_SIGNED_SWEEP_GRID = sorted(set([-v for v in WEIGHT_GRID] + WEIGHT_GRID))
+DIALOGUE_SWEEP_GRIDS = {
+    "negative_word_ratio": DIALOGUE_SIGNED_SWEEP_GRID,
+    "type_token_ratio": WEIGHT_GRID,
+}
 
 DIALOGUE_COLS = [
     "type_token_ratio",
@@ -609,6 +657,238 @@ def eval_ranking(
         r_list.append(hits / len(relevant))
     return float(np.mean(p_list)), float(np.mean(r_list)), p_list, r_list
 
+# ── Weight sensitivity sweep ──────────────────────────────────────────────────
+#
+# Sweeps each top-level scoring weight in recommendations_algorithm.py one at a
+# time, holding the other three fixed at their *relative* proportions (so all
+# four keep summing to 1 at every grid point), and re-measures Precision@K /
+# Recall@K at each setting. This shows empirically whether the chosen weights
+# matter and whether they sit near the best point on each curve, instead of
+# only asserting the choice in prose.
+
+def weights_for(varied_name: str, varied_value: float) -> dict[str, float]:
+    """
+    Full weight dict where `varied_name` = varied_value and the other three
+    weights are rescaled to keep their relative proportions while the four
+    still sum to 1. This isolates the balance under study instead of also
+    changing the overall magnitude of the score (which would not affect
+    ranking on its own).
+    """
+    others = {k: v for k, v in BASE_WEIGHTS.items() if k != varied_name}
+    others_sum = sum(others.values())
+    remaining = max(0.0, 1.0 - varied_value)
+    if others_sum <= 0:
+        scaled = {k: remaining / len(others) for k in others}
+    else:
+        scaled = {k: remaining * (v / others_sum) for k, v in others.items()}
+    scaled[varied_name] = varied_value
+    return scaled
+
+
+def apply_weights(weights: dict[str, float]) -> None:
+    for name, value in weights.items():
+        setattr(ra, name, value)
+
+
+def run_weight_sweep(
+    varied_name: str,
+    grid,
+    movies,
+    model,
+    train_movies,
+    train_input_movies,
+    dq_map,
+    franchise_map,
+    installment_trend,
+    relevant_by_user,
+    eval_user_ids,
+) -> pd.DataFrame:
+    rows = []
+    for value in grid:
+        weights = weights_for(varied_name, value)
+        apply_weights(weights)
+        t0 = time.time()
+        rec_fn = algorithm_recommender(
+            movies, model, train_movies, train_input_movies,
+            dq_map, franchise_map, installment_trend, top_n=K,
+        )
+        p_mean, r_mean, _, _ = eval_ranking(rec_fn, relevant_by_user, eval_user_ids, k=K)
+        elapsed = time.time() - t0
+        print(f"  {varied_name}={value:.2f} (others rescaled): "
+              f"Precision@{K}={p_mean:.4f}  Recall@{K}={r_mean:.4f}  [{elapsed:.1f}s]")
+        rows.append({"varied_weight": varied_name, "value": value, **weights,
+                      "precision": p_mean, "recall": r_mean})
+    apply_weights(BASE_WEIGHTS)  # restore baseline before the next weight's sweep
+    return pd.DataFrame(rows)
+
+
+def dialogue_weights_for(varied_name: str, varied_value: float) -> dict[str, float]:
+    """
+    Full DIALOGUE_FEATURE_WEIGHTS-shaped dict where `varied_name` is set to
+    `varied_value` (which may carry either sign, e.g. to test flipping a
+    feature from a penalty to a reward) and the other features are rescaled
+    to keep their relative magnitudes while all five magnitudes still sum to
+    1. Mirrors weights_for(), generalized to signed feature weights.
+    """
+    others = {k: v for k, v in BASE_DIALOGUE_WEIGHTS.items() if k != varied_name}
+    others_abs_sum = sum(abs(v) for v in others.values())
+    remaining = max(0.0, 1.0 - abs(varied_value))
+    if others_abs_sum <= 0:
+        scaled = {k: remaining / len(others) for k in others}
+    else:
+        scaled = {k: remaining * (v / others_abs_sum) for k, v in others.items()}
+    scaled[varied_name] = varied_value
+    return scaled
+
+
+def apply_dialogue_weights(weights: dict[str, float]) -> None:
+    ra.DIALOGUE_FEATURE_WEIGHTS = dict(weights)
+
+
+def run_dialogue_weight_sweep(
+    varied_name: str,
+    grid,
+    movies,
+    model,
+    train_movies,
+    train_input_movies,
+    franchise_map,
+    installment_trend,
+    relevant_by_user,
+    eval_user_ids,
+) -> pd.DataFrame:
+    """Like run_weight_sweep(), but for a DIALOGUE_FEATURE_WEIGHTS entry: each
+    grid point needs dq_map recomputed from the new feature weights before
+    scoring, since dialogue quality is precomputed per movie rather than
+    read live per candidate."""
+    rows = []
+    for value in grid:
+        weights = dialogue_weights_for(varied_name, value)
+        apply_dialogue_weights(weights)
+        dq_map = load_dialogue_features()
+        t0 = time.time()
+        rec_fn = algorithm_recommender(
+            movies, model, train_movies, train_input_movies,
+            dq_map, franchise_map, installment_trend, top_n=K,
+        )
+        p_mean, r_mean, _, _ = eval_ranking(rec_fn, relevant_by_user, eval_user_ids, k=K)
+        elapsed = time.time() - t0
+        print(f"  {varied_name}={value:+.2f} (others rescaled): "
+              f"Precision@{K}={p_mean:.4f}  Recall@{K}={r_mean:.4f}  [{elapsed:.1f}s]")
+        rows.append({"varied_weight": varied_name, "value": weights[varied_name], **weights,
+                      "precision": p_mean, "recall": r_mean})
+    apply_dialogue_weights(BASE_DIALOGUE_WEIGHTS)  # restore baseline before the next feature's sweep
+    return pd.DataFrame(rows)
+
+
+def save_sensitivity_plot(
+    weight_results: pd.DataFrame,
+    dialogue_results: pd.DataFrame,
+    plots_dir: Path,
+) -> None:
+    names = list(BASE_WEIGHTS.keys())
+    fig = plt.figure(figsize=(4.8 * len(names), 10))
+    gs = fig.add_gridspec(2, len(names))
+
+    top_axes = [fig.add_subplot(gs[0, i]) for i in range(len(names))]
+    # Bottom row: same per-subplot size as the top row (one grid column each),
+    # placed under the middle two columns so they read as centered.
+    bottom_axes = [
+        fig.add_subplot(gs[1, 1], sharey=top_axes[0]),
+        fig.add_subplot(gs[1, 2], sharey=top_axes[0]),
+    ]
+
+    def draw(ax, sub, chosen_value, xlabel):
+        ax.plot(sub["value"], sub["precision"], marker="o", linewidth=2.5, markersize=8,
+                color="#4C72B0", label=f"Precision@{K}")
+        ax.plot(sub["value"], sub["recall"], marker="s", linewidth=2.5, markersize=8,
+                color="#DD8452", label=f"Recall@{K}")
+        ax.axvline(chosen_value, color="#555555", linestyle="--", linewidth=1.5, label="Chosen value")
+        ax.set_xlabel(xlabel, fontsize=19)
+        ax.tick_params(axis="both", labelsize=16)
+
+    for ax, name in zip(top_axes, names):
+        sub = weight_results[weight_results["varied_weight"] == name].sort_values("value")
+        draw(ax, sub, BASE_WEIGHTS[name], WEIGHT_LABELS[name])
+
+    for ax, name in zip(bottom_axes, DIALOGUE_SWEEP_FEATURES):
+        sub = dialogue_results[dialogue_results["varied_weight"] == name].sort_values("value")
+        draw(ax, sub, BASE_DIALOGUE_WEIGHTS[name], DIALOGUE_WEIGHT_LABELS[name])
+
+    top_axes[0].set_ylabel("Score", fontsize=19)
+    bottom_axes[0].set_ylabel("Score", fontsize=19)
+    top_axes[0].legend(fontsize=15, loc="best")
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.88, hspace=0.45)
+    fig.suptitle("Weight Sensitivity: Precision@K / Recall@K vs. Each Scoring Weight", fontsize=24, y=0.96)
+    out_path = plots_dir / "weight_sensitivity.png"
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved plot to {out_path}")
+
+
+def run_weight_sensitivity(args: argparse.Namespace) -> None:
+    max_rows = None if args.rows == 0 else args.rows
+
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    PLOTS_DIR.mkdir(exist_ok=True)
+
+    print(f"Loading ratings (max_rows={max_rows}) ...")
+    train, test = load_and_split(max_rating_rows=max_rows)
+    print(f"  Train: {len(train):,}  Test: {len(test):,}")
+
+    movies = load_movies_metadata(MOVIES_PATH)
+    metadata_movie_ids = set(movies["MovieID"].astype(int))
+
+    print(f"Building SVD at k={WEIGHT_SENSITIVITY_SVD_K} ...")
+    model = build_svd(train, k=WEIGHT_SENSITIVITY_SVD_K)
+    model["movie_factors"] = model["movie_factors"][:, :WEIGHT_SENSITIVITY_SVD_K]
+    model_movie_ids = set(int(m) for m in model["movie_ids"].tolist())
+    allowed_movie_ids = metadata_movie_ids.intersection(model_movie_ids)
+    print(f"  Candidate movies: {len(allowed_movie_ids):,}")
+
+    relevant_by_user = build_relevant_test_movies(test, allowed_movie_ids=allowed_movie_ids)
+    eval_user_ids = select_eval_users(relevant_by_user, max_users=args.users)
+    print(f"  Eval users: {len(eval_user_ids):,} (of {len(relevant_by_user):,} eligible)")
+
+    train_movies = build_train_movies_for_users(train, eval_user_ids)
+    train_input_movies = build_train_input_movies_for_users(train, eval_user_ids, allowed_movie_ids)
+
+    dq_map = load_dialogue_features()
+    franchise_map = load_franchise_map()
+    installment_trend = load_installment_rating_trend()
+
+    print("\nBaseline weights:", BASE_WEIGHTS)
+
+    all_results = []
+    for name in args.weights:
+        print(f"\nSweeping {name} ...")
+        df = run_weight_sweep(
+            name, WEIGHT_GRID, movies, model, train_movies, train_input_movies,
+            dq_map, franchise_map, installment_trend, relevant_by_user, eval_user_ids,
+        )
+        all_results.append(df)
+
+    all_results = pd.concat(all_results, ignore_index=True)
+    all_results.to_csv(OUTPUT_DIR / "weight_sensitivity.csv", index=False)
+    print(f"\nSaved sweep results to {OUTPUT_DIR / 'weight_sensitivity.csv'}")
+
+    dialogue_results = []
+    for name in DIALOGUE_SWEEP_FEATURES:
+        print(f"\nSweeping dialogue feature weight: {name} ...")
+        df = run_dialogue_weight_sweep(
+            name, DIALOGUE_SWEEP_GRIDS[name], movies, model, train_movies, train_input_movies,
+            franchise_map, installment_trend, relevant_by_user, eval_user_ids,
+        )
+        dialogue_results.append(df)
+
+    dialogue_results = pd.concat(dialogue_results, ignore_index=True)
+    dialogue_results.to_csv(OUTPUT_DIR / "dialogue_weight_sensitivity.csv", index=False)
+    print(f"\nSaved dialogue feature sweep results to {OUTPUT_DIR / 'dialogue_weight_sensitivity.csv'}")
+
+    save_sensitivity_plot(all_results, dialogue_results, PLOTS_DIR)
+
+
 # ── Franchise analysis ────────────────────────────────────────────────────────
 
 def franchise_analysis(dataset: pd.DataFrame) -> dict | None:
@@ -778,10 +1058,10 @@ def save_plots(
     best_k: int,
     rmses: dict[str, float],
 ) -> None:
-    """Save a small set of diagnostic plots unique to this evaluation run:
-    method comparison (mean and full distribution) and the k-tuning curve.
-    These complement (but do not replace) the feature-correlation plots in
-    analyze_data.py."""
+    """Save the diagnostic plots used in the writeup for this evaluation run:
+    the overall method comparison, the per-user outcome distribution, and the
+    k-tuning curve. These complement (but do not replace) the feature-
+    correlation plots in analyze_data.py."""
     plt.rcParams.update({"figure.max_open_warning": 0})
     names = [name for name, _ in methods]
 
@@ -833,26 +1113,13 @@ def save_plots(
     fig.savefig(plots_dir / "overall_metrics_comparison.png", dpi=150, bbox_inches="tight", pad_inches=0.25)
     plt.close(fig)
 
-    # Precision@K / Recall@K by method (mean).
-    precisions = [results[name][0] for name in names]
-    recalls = [results[name][1] for name in names]
-    x = np.arange(len(names))
-    width = 0.35
+    # Note: a separate "Precision@K/Recall@K by method (mean)" bar chart used
+    # to be saved here (precision_recall_by_method.png), but it isn't used in
+    # the writeup -- its numbers are already the center/right panels of
+    # overall_metrics_comparison.png above -- so it's been dropped to keep
+    # this function producing only plots that appear in the writeup.
 
-    fig, ax = plt.subplots(figsize=(11, 7))
-    ax.bar(x - width / 2, precisions, width, label=f"Precision@{K}", color="#4C72B0")
-    ax.bar(x + width / 2, recalls, width, label=f"Recall@{K}", color="#DD8452")
-    ax.set_xticks(x)
-    ax.set_xticklabels(names, rotation=20, ha="right", fontsize=PLOT_TICK_FONT_SIZE)
-    ax.tick_params(axis="y", labelsize=PLOT_TICK_FONT_SIZE)
-    ax.set_ylabel("Score", fontsize=PLOT_LABEL_FONT_SIZE)
-    ax.set_title(f"Precision@{K} / Recall@{K} by Method", fontsize=PLOT_TITLE_FONT_SIZE, pad=16)
-    ax.legend(fontsize=PLOT_LEGEND_FONT_SIZE)
-    fig.tight_layout()
-    fig.savefig(plots_dir / "precision_recall_by_method.png", dpi=150)
-    plt.close(fig)
-
-    # New: per-user Precision@K / Recall@K distribution by method. Precision@K
+    # Per-user Precision@K / Recall@K distribution by method. Precision@K
     # can only take K+1 discrete values (hits / K) and is heavily zero-inflated,
     # so a boxplot collapses to a flat line at 0 with everything else drawn as
     # "outlier" points, and an 11-column heatmap is too fine-grained to read at
@@ -1284,6 +1551,21 @@ def _ranking_quality_word(precision: float, recall: float) -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--weight-sensitivity", action="store_true",
+                         help="Sweep the top-level scoring weights instead of running the full evaluation")
+    parser.add_argument("--rows", type=int, default=WEIGHT_SENSITIVITY_MAX_ROWS,
+                         help="[--weight-sensitivity] Max rating rows to load (0 = full file)")
+    parser.add_argument("--users", type=int, default=WEIGHT_SENSITIVITY_USER_SAMPLE,
+                         help="[--weight-sensitivity] Eval user sample size")
+    parser.add_argument("--weights", nargs="*", default=list(BASE_WEIGHTS.keys()),
+                         help="[--weight-sensitivity] Which weights to sweep")
+    args = parser.parse_args()
+
+    if args.weight_sensitivity:
+        run_weight_sensitivity(args)
+        return
+
     OUTPUT_DIR.mkdir(exist_ok=True)
     PLOTS_DIR.mkdir(exist_ok=True)
     log_path = OUTPUT_DIR / "evaluate_log.txt"

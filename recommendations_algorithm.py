@@ -47,14 +47,20 @@ DIALOGUE_FEATURE_WEIGHTS = {
     "bigram_repetition_ratio": -0.10,
 }
 
-# Signal weights (must sum to 1.0). Collaborative filtering remains the main
-# recommendation signal, while dialogue/language, franchise quality, and an
-# old-movie penalty provide quality-aware novelty. Genre is used only as a
-# post-filter on the final ranked list, not as a full-candidate scoring term.
+# Signal weights. Collaborative filtering remains the main recommendation
+# signal, while dialogue/language and franchise quality provide quality-aware
+# novelty (W_CF + W_DIALOGUE + W_FRANCHISE sum to 0.95). Genre is used only as
+# a post-filter on the final ranked list, not as a full-candidate scoring
+# term. W_YEAR_PENALTY is a separate subtracted term, not part of that sum;
+# the weight-sensitivity sweep (evaluate.py --weight-sensitivity) showed
+# Precision@K/Recall@K monotonically improve as it shrinks toward 0, and a
+# direct before/after check of recommended-movie release years found only a
+# modest age shift (mean year 1995.0 -> 1991.4, +5-8pp share before 1980) at
+# 0, so it's set low rather than removed entirely.
 W_CF        = 0.75
 W_DIALOGUE  = 0.15
 W_FRANCHISE = 0.05
-W_YEAR_PENALTY = 0.05
+W_YEAR_PENALTY = 0.02
 
 # Inside the CF component, balance personalization with general item quality.
 # This keeps recommendations relevant while still allowing universally liked

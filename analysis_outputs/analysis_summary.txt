@@ -16,6 +16,29 @@ Mean rating change from first installment: -0.7762
 Median rating change from first installment: -0.6000
 Share of later installments rated below the first: 82.33%
 
+2. Franchise installment number vs negative_word_ratio
+----------------------------------------
+Franchise rows with negative_word_ratio: 1,956
+Unique franchises: 742
+Pearson correlation: 0.0701
+Spearman correlation: 0.0627
+Linear trend slope: 0.000290 negative_word_ratio points per installment
+Interpretation: the estimated trend is positive, which supports the hypothesis that later installments have more negative dialogue.
+
+3. All dialogue features vs franchise installment number
+----------------------------------------
+Franchise rows used: 2,264
+Unique franchises: 796
+Dialogue features tested: 46
+Top 5 by |Pearson correlation| with installment number:
+  repeated_short_phrase_ratio: pearson=-0.0759, spearman=-0.0618, n=1956
+  trigram_repetition_ratio: pearson=-0.0743, spearman=-0.0653, n=1956
+  fear_word_ratio: pearson=0.0737, spearman=0.0738, n=1956
+  content_stemmed_num_tokens: pearson=-0.0734, spearman=-0.0532, n=1956
+  average_sentiment: pearson=-0.0732, spearman=-0.0645, n=1956
+Saved all-feature franchise-installment correlation heatmap to dialogue_feature_correlations_installment_heatmap.png.
+Saved recommender-dialogue-feature-by-installment small multiples to recommender_dialogue_features_by_installment.png.
+
 2. Dialogue features vs IMDb rating
 ----------------------------------------
 Rows with IMDb ratings: 53,791
@@ -117,6 +140,7 @@ Correlations with IMDb rating:
 
 Strongest absolute Pearson relationship: Negative word ratio (-0.1446).
 Interpretation: dialogue features show weak but non-zero relationships with IMDb rating.
+Saved all-feature IMDb-rating correlation heatmap to dialogue_feature_correlations_imdb_rating_heatmap.png.
 
 Optional content-stemmed features vs IMDb rating
 ----------------------------------------
@@ -129,7 +153,7 @@ Correlations with IMDb rating:
   Most frequent content stem share: Pearson=-0.0220, Spearman=-0.0647, n=42292
   Content stemmed one-time word ratio: Pearson=-0.0176, Spearman=-0.0478, n=42292
   Content stemmed vocabulary diversity: Pearson=0.0065, Spearman=-0.0148, n=42292
-Saved content-stemmed feature correlation plots to content_stemmed_feature_correlations.png and content_stemmed_feature_correlations_all.png.
+Saved content-stemmed feature correlation plot to content_stemmed_feature_correlations.png.
 
 Dialogue features vs mean user rating
 ----------------------------------------
@@ -419,6 +443,9 @@ Dialogue-feature correlations by genre, selected features:
 IMDb rating by decade and genre:
 Saved IMDb rating by decade and genre heatmap to imdb_rating_by_decade_genre_heatmap.png.
 
+negative_word_ratio by decade and genre:
+Saved negative_word_ratio by decade and genre heatmap to negative_word_ratio_by_decade_genre_heatmap.png.
+
 Vocabulary diversity vs IMDb rating by decade and genre:
 Saved vocabulary diversity vs IMDb rating correlation heatmap to vocabulary_diversity_imdb_correlation_by_decade_genre.png.
 
@@ -472,7 +499,6 @@ Highly redundant feature pairs, |r| >= 0.85:
 Rating, metadata, and dialogue-feature correlation plot:
 Strongest absolute correlation with IMDb rating in this plot: Runtime in minutes (0.2389, n=53,645).
 Saved rating/metadata/dialogue correlation plot to rating_dialogue_control_correlations.png.
-Saved rating/metadata/dialogue heatmap to rating_dialogue_control_heatmap.png.
 
 Simple regression checks:
 Franchise-only regression with controls:
