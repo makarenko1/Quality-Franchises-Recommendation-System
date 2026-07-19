@@ -30,6 +30,7 @@ import pandas as pd
 
 from recommendations_algorithm import (
     MOVIES_PATH,
+    ensure_setup_data,
     load_movies_metadata,
     load_dialogue_features,
     load_svd_model,
@@ -472,6 +473,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    ensure_setup_data()
     if "--interactive" in sys.argv:
         interactive_main()
     else:

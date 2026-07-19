@@ -1,12 +1,53 @@
 from pathlib import Path
 import re
 import importlib.util
+import subprocess
+import sys
 from collections import Counter
 
 import nltk
 import pandas as pd
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
+
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+# Large files are gitignored (see .gitignore / README "Notes") and only exist
+# locally after setup.sh has downloaded and unpacked them. Run it
+# automatically here, but only if something required is actually missing, so
+# a fresh clone doesn't need a separate manual `./setup.sh` step first.
+REQUIRED_DATA_PATHS = [
+    REPO_ROOT / "dataset_ratings_and_tags.csv",
+    REPO_ROOT / "datasets" / "imdb" / "raw" / "title.basics.tsv.gz",
+    REPO_ROOT / "datasets" / "imdb" / "raw" / "title.ratings.tsv.gz",
+    REPO_ROOT / "datasets" / "movies-32M" / "raw" / "ratings.csv",
+    REPO_ROOT / "datasets" / "movies-32M" / "movies_ratings_clean.csv",
+    REPO_ROOT / "datasets" / "opensubtitles" / "subs",
+]
+
+
+def ensure_setup_data() -> None:
+    def present(p: Path) -> bool:
+        return any(p.iterdir()) if p.is_dir() else p.exists()
+
+    missing = [p for p in REQUIRED_DATA_PATHS if not present(p)]
+    if not missing:
+        return
+
+    print("==> Missing data detected, running setup.sh to fetch it:")
+    for p in missing:
+        print(f"      - {p.relative_to(REPO_ROOT)}")
+    process = subprocess.Popen(["bash", str(REPO_ROOT / "setup.sh")], cwd=REPO_ROOT)
+    while process.poll() is None:
+        try:
+            process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            print("Downloading missing data...")
+    if process.returncode != 0:
+        sys.exit(f"setup.sh failed with exit code {process.returncode}")
+    if any(not present(p) for p in REQUIRED_DATA_PATHS):
+        sys.exit("setup.sh ran but required data is still missing.")
 
 
 DATASETS_DIR = Path("datasets")
@@ -2205,5 +2246,6 @@ def _content_stemmed_tokens(text: str) -> list[str]:
 
 
 if __name__ == "__main__":
+    ensure_setup_data()
     ensure_preprocessed_datasets()
     run_analysis()

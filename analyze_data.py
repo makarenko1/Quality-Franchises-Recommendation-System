@@ -52,7 +52,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 
-from recommendations_algorithm import DIALOGUE_FEATURE_WEIGHTS
+from recommendations_algorithm import DIALOGUE_FEATURE_WEIGHTS, ensure_setup_data
 
 
 DATASET_PATH = Path("dataset.csv")
@@ -251,6 +251,7 @@ YEAR_TREND_DIALOGUE_FEATURES = [
 
 
 def main():
+    ensure_setup_data()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     dataset = load_dataset(DATASET_PATH)

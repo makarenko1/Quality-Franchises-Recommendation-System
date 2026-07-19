@@ -1551,6 +1551,7 @@ def _ranking_quality_word(precision: float, recall: float) -> str:
 
 
 def main() -> None:
+    ra.ensure_setup_data()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--weight-sensitivity", action="store_true",
                          help="Sweep the top-level scoring weights instead of running the full evaluation")

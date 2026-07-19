@@ -50,8 +50,9 @@ A final lightweight post-filter removes clearly unsuitable candidates — stand-
 ```bash
 git clone <repo-url> && cd Quality-Franchises-Recommendation-System
 pip install -r requirements.txt   # pandas, numpy, scipy, matplotlib, nltk, gdown
-./setup.sh                        # downloads large data files (not stored in Git)
 ```
+
+`setup.sh` downloads the large data files not stored in Git (`dataset_ratings_and_tags.csv`, `datasets/imdb/raw/`, `datasets/movies-32M/raw/`, `datasets/movies-32M/movies_ratings_clean.csv`, `datasets/opensubtitles/subs/`). You don't need to run it yourself — every entry point below (`main.py`, `recommendations_algorithm.py`, `evaluate.py`, `generate_recommendations.py`, `analyze_data.py`) checks for this data first and runs `./setup.sh` automatically if any of it is missing. Run it manually only if you want to refresh the data ahead of time: `./setup.sh`.
 
 ---
 
@@ -174,7 +175,7 @@ Note: `franchise_installment_mean_rating.png`, `imdb_rating_by_decade_genre_heat
 ├── evaluate.py                    # Offline evaluation (RMSE, Precision@K/Recall@K, diagnostics)
 ├── generate_recommendations.py    # Builds the participant recommendation table; --interactive queries baselines from the CLI
 ├── analyze_data.py                # Franchise and dialogue correlation analysis
-├── setup.sh                       # Downloads large data files
+├── setup.sh                       # Downloads large data files; run automatically by the entry points above when data is missing
 ├── dataset.csv                    # Movie-level dataset
 ├── dataset_ratings_and_tags.csv   # Combined ratings/tags interaction dataset
 ├── recommender-web-code/          # Static frontend + Python API (Vercel-deployable web app);
@@ -203,12 +204,11 @@ Note: `franchise_installment_mean_rating.png`, `imdb_rating_by_decade_genre_heat
 
 ## Notes
 
-Large/generated files excluded from Git — `dataset_ratings_and_tags.csv`, `datasets/movies-32M/`, `datasets/imdb/raw/`, `datasets/opensubtitles/subs/`, `analysis_outputs/` — are recreated via `./setup.sh` and `python main.py`.
+Large/generated files excluded from Git — `dataset_ratings_and_tags.csv`, `datasets/movies-32M/`, `datasets/imdb/raw/`, `datasets/opensubtitles/subs/`, `analysis_outputs/` — are recreated via `./setup.sh` and `python main.py`. `./setup.sh` itself runs automatically, the first time it's needed, from any of the commands below.
 
 Typical workflow:
 
 ```bash
-./setup.sh
 python main.py
 python analyze_data.py
 python evaluate.py
