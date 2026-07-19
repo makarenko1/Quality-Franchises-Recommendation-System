@@ -11,24 +11,22 @@ from scipy.sparse.linalg import svds
 REPO_ROOT = Path(__file__).resolve().parent
 
 # Large files are gitignored (see .gitignore / README "Notes") and only exist
-# locally after setup.sh has downloaded and unpacked them. Run it
-# automatically here, but only if something required is actually missing, so
-# a fresh clone doesn't need a separate manual `./setup.sh` step first.
-REQUIRED_DATA_PATHS = [
-    REPO_ROOT / "dataset_ratings_and_tags.csv",
-    REPO_ROOT / "datasets" / "imdb" / "raw" / "title.basics.tsv.gz",
-    REPO_ROOT / "datasets" / "imdb" / "raw" / "title.ratings.tsv.gz",
-    REPO_ROOT / "datasets" / "movies-32M" / "raw" / "ratings.csv",
-    REPO_ROOT / "datasets" / "movies-32M" / "movies_ratings_clean.csv",
-    REPO_ROOT / "datasets" / "opensubtitles" / "subs",
-]
+# locally after setup.sh has downloaded and unpacked them. Each entry point
+# checks only the specific paths it actually reads (e.g. evaluate.py never
+# touches datasets/, so it shouldn't trigger a download of it) and runs
+# setup.sh automatically, but only if something it needs is actually missing.
+RATINGS_AND_TAGS_DATA_PATH = REPO_ROOT / "dataset_ratings_and_tags.csv"
+
+# Everything that scores/evaluates recommendations reads dataset.csv (tracked
+# in Git, always present) plus the ratings/tags dataset for the SVD model.
+RATINGS_REQUIRED_DATA_PATHS = [RATINGS_AND_TAGS_DATA_PATH]
 
 
-def ensure_setup_data() -> None:
+def ensure_setup_data(required_paths=RATINGS_REQUIRED_DATA_PATHS) -> None:
     def present(p: Path) -> bool:
         return any(p.iterdir()) if p.is_dir() else p.exists()
 
-    missing = [p for p in REQUIRED_DATA_PATHS if not present(p)]
+    missing = [p for p in required_paths if not present(p)]
     if not missing:
         return
 
@@ -43,7 +41,7 @@ def ensure_setup_data() -> None:
             print("Downloading missing data...")
     if process.returncode != 0:
         sys.exit(f"setup.sh failed with exit code {process.returncode}")
-    if any(not present(p) for p in REQUIRED_DATA_PATHS):
+    if any(not present(p) for p in required_paths):
         sys.exit("setup.sh ran but required data is still missing.")
 
 

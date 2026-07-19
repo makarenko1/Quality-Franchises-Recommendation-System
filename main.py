@@ -17,12 +17,12 @@ REPO_ROOT = Path(__file__).resolve().parent
 # locally after setup.sh has downloaded and unpacked them. Run it
 # automatically here, but only if something required is actually missing, so
 # a fresh clone doesn't need a separate manual `./setup.sh` step first.
+# main.py builds dataset_ratings_and_tags.csv itself, so unlike the other
+# entry points it needs the raw sources, not that output file.
 REQUIRED_DATA_PATHS = [
-    REPO_ROOT / "dataset_ratings_and_tags.csv",
     REPO_ROOT / "datasets" / "imdb" / "raw" / "title.basics.tsv.gz",
     REPO_ROOT / "datasets" / "imdb" / "raw" / "title.ratings.tsv.gz",
     REPO_ROOT / "datasets" / "movies-32M" / "raw" / "ratings.csv",
-    REPO_ROOT / "datasets" / "movies-32M" / "movies_ratings_clean.csv",
     REPO_ROOT / "datasets" / "opensubtitles" / "subs",
 ]
 

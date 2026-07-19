@@ -52,7 +52,7 @@ git clone <repo-url> && cd Quality-Franchises-Recommendation-System
 pip install -r requirements.txt   # pandas, numpy, scipy, matplotlib, nltk, gdown
 ```
 
-`setup.sh` downloads the large data files not stored in Git (`dataset_ratings_and_tags.csv`, `datasets/imdb/raw/`, `datasets/movies-32M/raw/`, `datasets/movies-32M/movies_ratings_clean.csv`, `datasets/opensubtitles/subs/`). You don't need to run it yourself — every entry point below (`main.py`, `recommendations_algorithm.py`, `evaluate.py`, `generate_recommendations.py`, `analyze_data.py`) checks for this data first and runs `./setup.sh` automatically if any of it is missing. Run it manually only if you want to refresh the data ahead of time: `./setup.sh`.
+`setup.sh` downloads the large data files not stored in Git (`dataset_ratings_and_tags.csv`, `datasets/imdb/raw/`, `datasets/movies-32M/raw/`, `datasets/movies-32M/movies_ratings_clean.csv`, `datasets/opensubtitles/subs/`). You don't need to run it yourself — `main.py`, `recommendations_algorithm.py`, `evaluate.py`, and `generate_recommendations.py` each check first for the specific files *they* need and run `./setup.sh` automatically if any are missing (`main.py` needs the raw sources it builds `dataset.csv` from; the other three just need `dataset_ratings_and_tags.csv`). `analyze_data.py` only reads `dataset.csv`, which is tracked in Git, so it never triggers a download. Run `./setup.sh` manually only if you want to refresh the data ahead of time.
 
 ---
 
@@ -175,7 +175,7 @@ Note: `franchise_installment_mean_rating.png`, `imdb_rating_by_decade_genre_heat
 ├── evaluate.py                    # Offline evaluation (RMSE, Precision@K/Recall@K, diagnostics)
 ├── generate_recommendations.py    # Builds the participant recommendation table; --interactive queries baselines from the CLI
 ├── analyze_data.py                # Franchise and dialogue correlation analysis
-├── setup.sh                       # Downloads large data files; run automatically by the entry points above when data is missing
+├── setup.sh                       # Downloads large data files; run automatically by main.py/recommendations_algorithm.py/evaluate.py/generate_recommendations.py when the data they need is missing
 ├── dataset.csv                    # Movie-level dataset
 ├── dataset_ratings_and_tags.csv   # Combined ratings/tags interaction dataset
 ├── recommender-web-code/          # Static frontend + Python API (Vercel-deployable web app);

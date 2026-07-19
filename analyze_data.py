@@ -52,7 +52,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 
-from recommendations_algorithm import DIALOGUE_FEATURE_WEIGHTS, ensure_setup_data
+from recommendations_algorithm import DIALOGUE_FEATURE_WEIGHTS
 
 
 DATASET_PATH = Path("dataset.csv")
@@ -251,7 +251,9 @@ YEAR_TREND_DIALOGUE_FEATURES = [
 
 
 def main():
-    ensure_setup_data()
+    # dataset.csv is tracked in Git and always present; dataset_ratings_and_tags.csv
+    # is optional here (load_mean_user_ratings() skips gracefully if it's absent),
+    # so this doesn't need to force a setup.sh run.
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     dataset = load_dataset(DATASET_PATH)
